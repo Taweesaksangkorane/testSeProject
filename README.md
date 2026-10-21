@@ -1,47 +1,68 @@
-# RS-1 Document Extraction PoC (No AI)
+# 404 Team Found
 
-A small **Next.js + Node.js** proof-of-concept for extracting registry-oriented fields from the Mae Fah Luang University Thai **RS-1** proposal template. No AI and no external document processing API. DOCX files are parsed locally.
+## Personal Research Grant Management System for Mae Fah Luang University
 
-## Run
+## Team Members
+
+| Full Name | Student ID | GitHub Username | Role |
+|---|---|---|---|
+| Taweesak Sangkoranee | 6731503012 | [Taweesaksangkorane](https://github.com/Taweesaksangkorane) | Backend Developer |
+| Wichayaphon Seepin | 6731503036 | [6731503036WichayaponSeepin](https://github.com/6731503036WichayaponSeepin) | Project Manager |
+| Aubolwan Maneechan | 6731503044 | [6731503044AubonwanManeechan](https://github.com/6731503044AubonwanManeechan) | Frontend Developer |
+
+## Advisor and Stakeholder
+
+**Project Advisor:** Aj. Prasara Jakkaew
+
+**Stakeholder Organization:** Research Administration Division, Mae Fah Luang University
+
+**Coordinator:** Wanwisa Wongsawan  
+**Contact Number:** 053-91-6359
+
+## Project Summary
+
+The system helps researchers manage personal research grant proposals, generate documents, and check proposal status. The current proof of concept extracts data from Mae Fah Luang University's Thai RS-1 proposal form into editable input fields.
+
+## RS-1 Document Extraction PoC
+
+This is a Next.js and Node.js proof of concept. DOCX files are parsed locally without AI or an external document-processing API.
+
+### Run locally
 
 ```bash
 npm install
 npm run dev
 ```
 
-Open **http://localhost:3000**, upload an RS-1 `.docx` file, and review/edit the extracted values.
+Open `http://localhost:3000`. Users can either complete the RS-1 form manually or upload an RS-1 `.docx`, review the extracted values, edit them, and save a local draft.
 
-## Registry fields
+### Supported extraction
 
-- `projectTitleTH`: Thai proposal title
-- `projectTitleEN`: English proposal title
-- `principalInvestigator`: project leader
-- `coResearchers`: co-researcher names
-- `durationStart`, `durationEnd`: project dates
-- `researchType`: research type section, flagged for human review because Word checkbox state is not always represented as text
-- `keywordsTH`, `keywordsEN`: keywords
-- `objectives`: objectives
-- `expectedOutcomes`: expected outcomes
-- `totalBudget`: total amount read from the **actual Word budget table**
-- `documentCompleteness`: whether all registry fields were found
+- Thai and English project titles
+- Strategy and research type
+- Principal investigator, co-researchers, advisor, and collaboration details
+- Keywords, objectives, methodology, scope, schedule, and expected outcomes
+- Editable budget rows, multiplication breakdowns, and calculated total
+- Research standards and publication type checkboxes
+- Investigator biography and proposed experts
+- Thai Unicode warning checks and fields requiring human review
 
-Additionally, the app keeps structured co-researcher and budget rows, computes the sum of amount cells, flags a mismatch, and checks for basic Unicode corruption indicators. It intentionally never “autocorrects” Thai combining marks or inserts missing data.
+### Current limits
 
-## Privacy
+- Supports `.docx` only, up to 10 MB.
+- Legacy `.doc` files must be opened in Microsoft Word and saved as `.docx` before upload.
+- PDF is not supported yet because scanned documents require OCR and document layout can vary.
+- Rule-based extraction requires recognizable RS-1 headings and must be reviewed by the user.
+- The PoC does not persist uploaded files or send them to an AI service.
 
-The DOCX is parsed by **your own Next.js server** and returned in an HTTP response. This PoC does **not** persist files or send documents to an AI service. If deployed on a cloud provider, documents will still travel to that provider's server. Use synthetic documents for demos; apply authentication, secure storage, malware protections, logging restrictions, and proper privacy review before using real records.
+### Code layout
 
-## Limits
+- `lib/docx.ts` - DOCX XML reader
+- `lib/extract.ts` - RS-1 field extraction and validation
+- `app/api/extract/route.ts` - DOCX upload API
+- `app/page.tsx` - manual entry, upload, review, and local draft interface
 
-- `.docx` only, max 10MB. Convert legacy `.doc` files with Microsoft Word before upload. PDF is intentionally unsupported because scanned files require OCR and extracted layout can be unreliable.
-- Rule-based matching assumes recognizable RS-1 heading text and a two-column budget table.
-- XML parser reads `w:t` runs, tabs and line breaks in document body paragraphs and tables, but not textboxes, pictures, tracked changes or arbitrary content-control variants.
-- Thai Unicode checks detect common warning indicators, **not** the semantic correctness of every Thai word.
-- Requires human review. Different RS-1 form versions may need additional patterns.
+## Key Links
 
-## Code layout
-
-- `lib/docx.ts`: DOCX XML reader, preserved run order and tables.
-- `lib/extract.ts`: registry-field RS-1 rule parser + validation.
-- `app/api/extract/route.ts`: multipart upload API.
-- `app/page.tsx`: upload, editable preview, warnings and JSON export.
+- [GitHub Repository](https://github.com/Taweesaksangkorane/testSeProject)
+- [Google Meet](https://meet.google.com/hwk-bgzu-pou)
