@@ -6,6 +6,7 @@ function Section({number,title,value}:{number:string;title:string;value:string})
 
 export default function Rs1Preview({form,onBack}:{form:ProjectForm;onBack:()=>void}){
  const people=[form.principal,...form.coResearchers];
+ const signerNames=[form.advisorDetails.name,form.principal.name,form.coResearchers[0]?.name??''];
  const budget=form.budgetRows.filter(row=>row.description||row.breakdown||row.amount);
  const total=budget.reduce((sum,row)=>sum+(Number(row.amount.replace(/,/g,''))||0),0);
  return <div className="preview-screen"><div className="preview-toolbar"><button className="secondary" onClick={onBack}>กลับไปแก้ไข</button><div><strong>ตัวอย่างเอกสาร A4</strong><span>ตรวจรูปแบบก่อนบันทึกเป็น PDF</span></div><button onClick={()=>window.print()}>พิมพ์ / บันทึกเป็น PDF</button></div><article className="a4-document">
@@ -19,5 +20,6 @@ export default function Rs1Preview({form,onBack}:{form:ProjectForm;onBack:()=>vo
   <Section number="20" title="มาตรฐานการวิจัย" value={form.researchStandard.join(', ')}/><Section number="21" title="คำชี้แจงอื่น ๆ" value={form.otherNotes}/>
   <section className="document-section page-break-before"><h2>ประวัติหัวหน้าโครงการวิจัย</h2>{Object.entries(form.principalBiography).map(([key,value])=>value&&<div className="biography-row" key={key}><strong>{key}</strong><span>{value}</span></div>)}</section>
   {form.experts.length>0&&<section className="document-section"><h2>รายชื่อผู้ทรงคุณวุฒิที่เสนอ</h2><table><thead><tr><th>ชื่อ-สกุล</th><th>ตำแหน่ง</th><th>สังกัด</th><th>อีเมล</th></tr></thead><tbody>{form.experts.map((expert,index)=><tr key={index}><td>{show(expert.name)}</td><td>{show(expert.academicPosition)}</td><td>{show(expert.affiliation)}</td><td>{show(expert.email)}</td></tr>)}</tbody></table></section>}
+  <section className="document-signatures">{form.signatures.map((signature,index)=><div key={signature.role}>{signature.dataUrl&&<img src={signature.dataUrl} alt={`ลายเซ็น ${signature.role}`}/>}<div>ลงชื่อ ______________________________</div><div>({show(signerNames[index])})</div><div>{signature.role}</div><div>วันที่ ...................................................</div></div>)}</section>
  </article></div>;
 }

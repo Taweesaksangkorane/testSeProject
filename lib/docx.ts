@@ -1,5 +1,6 @@
 import JSZip from 'jszip';
 import { XMLParser } from 'fast-xml-parser';
+import WordExtractor from 'word-extractor';
 
 export type DocBlock = { type: 'paragraph'; text: string } | {type:'table'; rows: string[][]};
 export type CheckboxMark = {state:'checked'|'unchecked'|'unknown'; code:string; font:string};
@@ -96,4 +97,18 @@ export async function readDocx(data: Buffer):Promise<DocContent> {
     }
   }
   return {blocks, paragraphs:paragraphDetails.map(x=>x.text), paragraphDetails, tables:blocks.filter(x=>x.type==='table').map(x=>x.rows)};
+}
+
+export async function readLegacyDoc(data: Buffer):Promise<DocContent> {
+  const extractor=new WordExtractor();
+  const document=await extractor.extract(data);
+  const body=document.getBody().replace(/\r/g,'');
+  const paragraphs=body.split(/\n+/).map((text:string)=>text.trim()).filter(Boolean);
+  const paragraphDetails=paragraphs.map((text:string)=>({text,checkboxes:[]}));
+  return {
+    blocks:paragraphs.map((text:string)=>({type:'paragraph' as const,text})),
+    paragraphs,
+    paragraphDetails,
+    tables:[]
+  };
 }

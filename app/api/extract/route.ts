@@ -1,5 +1,5 @@
 import {NextResponse} from 'next/server';
-import {readDocx} from '../../../lib/docx';
+import {readDocx, readLegacyDoc} from '../../../lib/docx';
 import {extractRs1} from '../../../lib/extract';
 
 export const runtime = 'nodejs';
@@ -20,8 +20,8 @@ export async function POST(request: Request) {
 
     const filename = entry.name.toLowerCase();
     const data = Buffer.from(await entry.arrayBuffer());
-    if (!filename.endsWith('.docx')) return errorResponse('รองรับเฉพาะไฟล์ .docx เท่านั้น กรุณาแปลงไฟล์ .doc ด้วย Microsoft Word ก่อนอัปโหลด', 415);
-    const document = await readDocx(data);
+    if (!filename.endsWith('.docx') && !filename.endsWith('.doc')) return errorResponse('รองรับเฉพาะไฟล์ .doc และ .docx', 415);
+    const document = filename.endsWith('.docx') ? await readDocx(data) : await readLegacyDoc(data);
 
     return NextResponse.json(extractRs1(document));
   } catch (error) {

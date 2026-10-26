@@ -34,7 +34,7 @@ npm install
 npm run dev
 ```
 
-Open `http://localhost:3000`. Users can either complete the RS-1 form manually or upload an RS-1 `.docx`, review the extracted values, edit them, and save a local draft.
+Open `http://localhost:3000`. Users can either complete the RS-1 form manually or upload an RS-1 `.doc`/`.docx`, review the extracted values or raw JSON, add three electronic signature images, edit the form, and save a local draft.
 
 ### Supported extraction
 
@@ -49,8 +49,8 @@ Open `http://localhost:3000`. Users can either complete the RS-1 form manually o
 
 ### Current limits
 
-- Supports `.docx` only, up to 10 MB.
-- Legacy `.doc` files must be opened in Microsoft Word and saved as `.docx` before upload.
+- Supports `.doc` and `.docx` documents up to 10 MB. Legacy `.doc` extraction is text-based, so complex tables may need more manual review than `.docx` files.
+- The advisor, principal investigator, and co-researcher signatures support PNG, JPG, and WebP images up to 2 MB each and are stored only in the browser draft.
 - PDF is not supported yet because scanned documents require OCR and document layout can vary.
 - Rule-based extraction requires recognizable RS-1 headings and must be reviewed by the user.
 - The PoC does not persist uploaded files or send them to an AI service.
