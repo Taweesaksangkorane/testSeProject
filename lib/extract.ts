@@ -49,13 +49,55 @@ function labelledValue(lines:string[], labels:RegExp[]):string|null {
  }
  return null;
 }
+// Dates from the original RS-1 template and from our Word generator.
+// Do not search the entire document: unrelated biographies may contain dates.
 function firstDate(text:string,which:'start'|'end'):string|null {
- const datePattern=String.raw`\d{1,2}\s*(?:[\/-]\s*\d{1,2}\s*[\/-]\s*\d{2,4}|\S+\s+\d{4})`;
- const range=text.match(new RegExp(String.raw`ระยะเวลาที่ทำการวิจัย\s*[:：]?\s*(${datePattern})\s*(?:ถึง|จนถึง|-)\s*(${datePattern})`));
- if(range)return range[which==='start'?1:2]??null;
- const label=which==='start'?/(?:วันเริ่มต้น|วันที่เริ่มต้น|เริ่มต้น)\s*[:：-]\s*/:/(?:วันสิ้นสุด|วันที่สิ้นสุด|สิ้นสุด)\s*[:：-]\s*/;
- const labelled=text.match(new RegExp(label.source+`(${datePattern})`));
- return labelled?.[1]??null;
+ const date=String.raw`(?:\d{4}-\d{1,2}-\d{1,2}|\d{1,2}[/-]\d{1,2}[/-]\d{2,4}|\d{1,2}\s+[^\d\s]+\s+\d{4})`;
+ const startLabel=String.raw`(?:วันเริ่มต้น|วันที่เริ่มต้น|เริ่มต้น)`;
+ const endLabel=String.raw`(?:วันสิ้นสุด|วันที่สิ้นสุด|สิ้นสุด)`;
+ const label=which==='start'?startLabel:endLabel;
+ const labelled=text.match(new RegExp(`${label}\\s*[:：-]\\s*(${date})`,'u'));
+ if(labelled)return labelled[1];
+ // Supports "ระยะเวลาที่ทำการวิจัย ... 2027-01-01 ถึง 2027-12-31".
+ const ranges=[
+  new RegExp(String.raw`ระยะเวลาที่ทำการวิจัย[^\n]{0,500}?(${date})\s*(?:ถึง|จนถึง|to|–|—|\s+-\s+)\s*(${date})`,'iu'),
+  new RegExp(String.raw`(${date})\s*(?:ถึง|จนถึง|to|–|—|\s+-\s+)\s*(${date})`,'iu')
+ ];
+ for(const re of ranges){const m=text.match(re);if(m)return m[which==='start'?1:2];}
+ return null;
+}
+function selectedCheckbox(text:string,marks:{state:string}[]):boolean {
+ if(marks.some(mark=>mark.state==='checked'))return true;
+ return /^\s*(?:✓|☑|☒|✔|\uF0FE|\uF0FC)/u.test(text);
+}
+function peopleInSection(lines:string[]):Person[] {
+ const result:Person[]=[];
+ const labels: {key:keyof Person; re:RegExp}[]=[
+  {key:'name',re:/^ชื่อ\s*[-–]?\s*สกุล\s*[:：]?\s*(.*)$/},
+  {key:'affiliation',re:/^สังกัดหน่วยงาน\s*[:：]?\s*(.*)$/},
+  {key:'phone',re:/^เบอร์โทรศัพท์ที่ติดต่อได้\s*[:：]?\s*(.*)$/},
+  {key:'email',re:/^อีเมล\s*[:：]?\s*(.*)$/},
+  {key:'responsibility',re:/^ความรับผิดชอบต่อโครงการที่เสนอ\s*[:：]?\s*(.*)$/},
+  {key:'share',re:/^(?:คิดเป็น)?\s*สัดส่วนการวิจัย(?:ร้อยละ)?\s*[:：]?\s*(.*)$/}
+ ];
+ const blank=():Person=>({name:'',affiliation:'',phone:'',email:'',responsibility:'',share:''});
+ let person:Person|null=null;
+ for(let i=0;i<lines.length;i++){
+  const line=clean(lines[i]);
+  const label=labels.find(item=>item.re.test(line));
+  if(!label)continue;
+  let value=withoutPlaceholder(line.match(label.re)?.[1]??'');
+  if(!value&&i+1<lines.length){
+   const next=clean(lines[i+1]);
+   if(next&&!labels.some(item=>item.re.test(next))&&!/^(?:ที่ปรึกษาโครงการวิจัย|\d+\.\s)/.test(next)) {value=withoutPlaceholder(next);i++;}
+  }
+  if(label.key==='name'){
+   if(person&&Object.values(person).some(Boolean))result.push(person);
+   person=blank();person.name=value;
+  }else if(person)person[label.key]=value;
+ }
+ if(person&&Object.values(person).some(Boolean))result.push(person);
+ return result;
 }
 export function extractRs1(doc:DocContent):Extraction {
  const p=doc.paragraphs.map(clean);const warnings:string[]=[];
@@ -67,9 +109,11 @@ export function extractRs1(doc:DocContent):Extraction {
   'การวิจัยและสร้างนวัตกรรมเพื่อเพิ่มขีดความสามารถการแข่งขัน',
   'การวิจัยและสร้างนวัตกรรมเพื่อการพัฒนาเชิงพื้นที่และลดความเหลื่อมล้ำ'
  ];
- const strategyDetail=details.find(detail=>/^\s*(?:✓|☑|☒)/u.test(detail.text));
- const strategyText=strategyDetail?.text.replace(/^\s*(?:✓|☑|☒)\s*\d+[.)]?\s*/u,'').trim()??'';
- const strategy=make(strategyOptions.find(option=>strategyText.includes(option))??null,'ส่วนประเด็นยุทธศาสตร์การวิจัย');
+ const strategyDetails=details.filter(detail=>/^\s*(?:[☐☑☒✓✔]\s*)?[1-5][.)]\s*/u.test(detail.text) && strategyOptions.some(option=>detail.text.replace(/\s+/g,' ').includes(option)));
+ const pickedStrategies=strategyDetails.filter(detail=>selectedCheckbox(detail.text,detail.checkboxes));
+ const strategy=make(pickedStrategies.length===1?strategyOptions.find(option=>pickedStrategies[0].text.replace(/\s+/g,' ').includes(option))??null:null,'ส่วนประเด็นยุทธศาสตร์การวิจัย');
+ if(pickedStrategies.length>1){strategy.status='review';warnings.push('ยุทธศาสตร์การวิจัยถูกเลือกมากกว่าหนึ่งข้อ กรุณาตรวจสอบ');}
+ if(pickedStrategies.length===0&&strategyDetails.length)warnings.push('ไม่พบยุทธศาสตร์การวิจัยที่ถูกเลือกในเอกสาร');
  const experts:Expert[]=[];
  const expertSection=p.findIndex(s=>heading(s,/^ส่วน\s*ค\s*:/));
  if(expertSection>=0){
@@ -171,43 +215,15 @@ export function extractRs1(doc:DocContent):Extraction {
   if(th){let v=withoutPlaceholder(th[1]);if(!v && titleScope[i+1]&&!/ภาษาอังกฤษ/.test(titleScope[i+1]))v=withoutPlaceholder(titleScope[i+1]);projectTitleTH=make(v,`ย่อหน้า: ${(titleSectionStart>=0?titleSectionStart+1:0)+i+1}`);}
   if(en){let v=withoutPlaceholder(en[1]);if(!v && titleScope[i+1]&&!/ยุทธศาสตร์|ส่วน\s*ก/.test(titleScope[i+1]))v=withoutPlaceholder(titleScope[i+1]);projectTitleEN=make(v,`ย่อหน้า: ${(titleSectionStart>=0?titleSectionStart+1:0)+i+1}`);}
  }
- // Keep all co-researcher names in a single editable field and retain structured records when labels are present.
- const coResearchers:Person[]=[];
+ // Parse each person in one pass; never increment an index before creating its record.
  const coStart=p.findIndex(s=>heading(s,/^ผู้ร่วมโครงการวิจัย/));
  const coEnd=p.findIndex((s,i)=>i>coStart&&heading(s,/^ที่ปรึกษาโครงการวิจัย/));
- if(coStart>=0){
-  const area=p.slice(coStart+1,coEnd>=0?coEnd:coStart+20);
-  for(let i=0;i<area.length;i++){
-   const nameLine=area[i].match(/^ชื่อ\s*[-–]?\s*สกุล\s*[:：]?\s*(.*)$/);
-   if(!nameLine)continue;
-   const candidate=withoutPlaceholder(nameLine[1])||withoutPlaceholder(area[i+1]??'');
-   const isFormLabel=/^(สังกัดหน่วยงาน|เบอร์โทรศัพท์ที่ติดต่อได้|อีเมล|ความรับผิดชอบต่อโครงการที่เสนอ|คิดเป็นสัดส่วนการวิจัยร้อยละ)$/.test(candidate);
-   if(candidate&&!isFormLabel)coResearchers.push({name:candidate,affiliation:'',phone:'',email:'',responsibility:'',share:''});
-  }
-  const labels=[
-   {key:'affiliation',re:/^สังกัดหน่วยงาน\s*[:：]?\s*(.*)$/},
-   {key:'phone',re:/^เบอร์โทรศัพท์ที่ติดต่อได้\s*[:：]?\s*(.*)$/},
-   {key:'email',re:/^อีเมล\s*[:：]?\s*(.*)$/},
-   {key:'responsibility',re:/^ความรับผิดชอบต่อโครงการที่เสนอ\s*[:：]?\s*(.*)$/},
-   {key:'share',re:/^(?:คิดเป็น)?\s*สัดส่วนการวิจัย(?:ร้อยละ)?\s*[:：]?\s*(.*)$/}
-  ] as const;
-  let personIndex=-1;
-  for(const line of area){
-   const nameMatch=line.match(/^ชื่อ\s*[-–]?\s*สกุล\s*[:：]?\s*(.*)$/);
-   if(nameMatch){
-    const candidate=withoutPlaceholder(nameMatch[1]);
-    if(candidate)personIndex++;
-    continue;
-   }
-   if(personIndex<0)continue;
-   const label=labels.find(item=>item.re.test(line));
-   if(label)coResearchers[personIndex][label.key]=withoutPlaceholder(line.match(label.re)?.[1]??'');
-  }
- }
+ const coResearchers=coStart>=0?peopleInSection(p.slice(coStart+1,coEnd>=0?coEnd:coStart+30)).filter(person=>person.name):[];
  const coResearcherField=make(coResearchers.map(x=>x.name).join('\n')||null,coStart>=0?'ส่วนคณะผู้วิจัย: ผู้ร่วมโครงการวิจัย':null);
  const duration=section(p,/^แผนการดำเนินงานตลอดโครงการวิจัย/,[/^ผลงานตามระยะเวลา/,/^ผลลัพธ์ที่คาด/]);
- const durationText=[duration.text,p[duration.index]??''].join('\n');
- const dateText=[durationText,...p,...doc.tables.flat(2)].join('\n');
+ const durationEndIndex=duration.index>=0?p.findIndex((line,i)=>i>duration.index&&heading(line,/^ผลงานตามระยะเวลา/)):-1;
+ const durationText=duration.index>=0?p.slice(duration.index,durationEndIndex>=0?durationEndIndex:duration.index+15).join('\n'):'';
+ const dateText=durationText; // Do not pick a date from another section of the document.
  const durationStart=make(firstDate(dateText,'start'),duration.index>=0?'ส่วนแผนการดำเนินงาน':'เอกสาร RS-1');
  const durationEnd=make(firstDate(dateText,'end'),duration.index>=0?'ส่วนแผนการดำเนินงาน':'เอกสาร RS-1');
  if(durationStart.status==='missing'||durationEnd.status==='missing')warnings.push('ไม่พบวันเริ่มต้นหรือวันสิ้นสุดโครงการ กรุณาตรวจสอบ');
@@ -222,16 +238,11 @@ export function extractRs1(doc:DocContent):Extraction {
  const keywordsTH=make(withoutPlaceholder(combinedTH??labelledValue(keywordLines,[/^(?:คำสำคัญภาษาไทย|ภาษาไทย)\s*[:：-]\s*(.+)$/i])??keywordLines[0]??''),keyword.index>=0?'ส่วนคำสำคัญ (Keywords)':null);
  const keywordsEN=make(withoutPlaceholder(combinedEN??labelledValue(keywordLines,[/^(?:คำสำคัญภาษาอังกฤษ|ภาษาอังกฤษ|English)\s*[:：-]\s*(.+)$/i])??keywordLines[1]??''),keyword.index>=0?'ส่วนคำสำคัญ (Keywords)':null);
  // Investigator is from section 1.1 only, not co-investigators or Part B.
- let principalInvestigator=empty();
- let leaderIndex=p.findIndex(s=>/^(?:1\.1\s*)?หัวหน้าโครงการวิจัย\s*$/.test(s));
- if(leaderIndex>=0){const stop=p.findIndex((s,i)=>i>leaderIndex && /(?:ผู้ร่วมโครงการวิจัย|ผู้ร่วมวิจัย|ที่ปรึกษาโครงการวิจัย)/.test(s)); const area=p.slice(leaderIndex+1, stop>=0?stop:leaderIndex+14);
-  for(let i=0;i<area.length;i++) {const m=area[i].match(/^ชื่อ\s*[-–]?\s*สกุล\s*[:：]?\s*(.*)$/);
-   if(m){const value=withoutPlaceholder(m[1]) || (!/สังกัด|โทรศัพท์|อีเมล/.test(area[i+1]??'')?withoutPlaceholder(area[i+1]??''):''); principalInvestigator=make(value,`ส่วนหัวหน้าโครงการวิจัย ย่อหน้า ${leaderIndex+i+2}`);break;}
-  }
-   if(principalInvestigator.status==='missing') principalInvestigator=make(labelledValue(area,[/^ชื่อ\s*[-–]?\s*สกุล\s*[:：]\s*(.+)$/]),'ส่วนหัวหน้าโครงการวิจัย');
-  }
- const principalDetails:Person={name:principalInvestigator.value??'',affiliation:'',phone:'',email:'',responsibility:'',share:''};
- if(leaderIndex>=0){const stop=p.findIndex((s,i)=>i>leaderIndex&&/ผู้ร่วมโครงการวิจัย|ผู้ร่วมวิจัย|ที่ปรึกษาโครงการวิจัย/.test(s));const area=p.slice(leaderIndex+1,stop>=0?stop:leaderIndex+14);const labels=[{key:'affiliation',re:/^สังกัดหน่วยงาน\s*[:：]?\s*(.*)$/},{key:'phone',re:/^เบอร์โทรศัพท์ที่ติดต่อได้\s*[:：]?\s*(.*)$/},{key:'email',re:/^อีเมล\s*[:：]?\s*(.*)$/},{key:'responsibility',re:/^ความรับผิดชอบต่อโครงการที่เสนอ\s*[:：]?\s*(.*)$/},{key:'share',re:/^(?:คิดเป็น)?\s*สัดส่วนการวิจัย(?:ร้อยละ)?\s*[:：]?\s*(.*)$/}] as const;for(const line of area)for(const label of labels)if(label.re.test(line))principalDetails[label.key]=withoutPlaceholder(line.match(label.re)?.[1]??'');}
+ const leaderIndex=p.findIndex(s=>/^(?:1\.1\s*)?หัวหน้าโครงการวิจัย\s*$/.test(s));
+ const leaderStop=leaderIndex>=0?p.findIndex((s,i)=>i>leaderIndex&&/^(?:1\.2\s*)?ผู้ร่วมโครงการวิจัย$|^ที่ปรึกษาโครงการวิจัย$/.test(s)):-1;
+ const leader=leaderIndex>=0?peopleInSection(p.slice(leaderIndex+1,leaderStop>=0?leaderStop:leaderIndex+20))[0]:undefined;
+ const principalDetails:Person=leader??{name:'',affiliation:'',phone:'',email:'',responsibility:'',share:''};
+ const principalInvestigator=make(principalDetails.name||null,leaderIndex>=0?'ส่วนหัวหน้าโครงการวิจัย':null);
  // Capture objective text between section 7 and 8. Do not include instruction headings.
  let objectives=empty();
  const objStart=p.findIndex(s=>heading(s,/^วัตถุประสงค์ของโครงการวิจัย/));
@@ -268,7 +279,7 @@ export function extractRs1(doc:DocContent):Extraction {
   .replace(/^\s*(?:✓|☑|☒|☐|\uF0FE|\uF0FC)\s*/u,'')
   .trim();
  const selected=(pattern:RegExp):boolean=>details.some(detail=>pattern.test(checkboxText(detail.text))&&(
-  detail.checkboxes.some(mark=>mark.state==='checked')||/^\s*(?:✓|☑|☒)/u.test(detail.text)
+  selectedCheckbox(detail.text,detail.checkboxes)
  ));
  const hasCheckboxes=(patterns:RegExp[]):boolean=>details.some(detail=>patterns.some(pattern=>pattern.test(checkboxText(detail.text)))&&(
   detail.checkboxes.length>0||/^\s*(?:✓|☑|☒|☐)/u.test(detail.text)
@@ -318,17 +329,18 @@ export function extractRs1(doc:DocContent):Extraction {
   if(categoryMatch){currentCategory=clean(categoryMatch[1]);continue;}
   if(/รวมงบประมาณที่ใช้ในการวิจัย|รวมงบประมาณ/.test(label)){totalBudget=make(num(money)?.toString()??null,`ตารางงบประมาณ แถว ${idx+1}`);continue;}
   if(!money || /จำนวนเงิน/.test(money))continue;
-  const amount=num(money);if(amount!==null){if(amount===0)continue;const parenthesized=label.match(/\s*\(([^)]*(?:×|x)[^)]*)\)\s*$/i);const inline=label.match(/\s+(\d[\d,]*(?:\.\d+)?\s+[^\s×x]+(?:\s*[×x]\s*\d[\d,]*(?:\.\d+)?\s+[^\s×x]+)+)\s*$/i);const factor=parenthesized??inline;const rawDescription=factor&&factor.index!==undefined?label.slice(0,factor.index).trim():label;const description=rawDescription.replace(/^\s*-\s*/,'').trim();budgetItems.push({category:currentCategory,description,breakdown:factor?.[1]?.trim()??'',amount});sum+=amount;hasAmount=true;}
+  const amount=num(money);if(amount!==null){if(amount===0)continue;const parenthesized=label.match(/\s*\(([^)]*(?:×|x)[^)]*)\)\s*$/i);const inline=label.match(/\s+(\d[\d,]*(?:\.\d+)?\s+[^\s×x]+(?:\s*[×x]\s*\d[\d,]*(?:\.\d+)?\s+[^\s×x]+)+)\s*$/i);const factor=parenthesized??inline;const rawDescription=factor&&factor.index!==undefined?label.slice(0,factor.index).trim():label;const [itemLabel, ...breakdownParts]=label.split(/\s+—\s+/);const description=(breakdownParts.length?itemLabel:rawDescription).replace(/^\s*-\s*/,'').trim();const breakdown=breakdownParts.join(' — ').trim()||factor?.[1]?.trim()||'';budgetItems.push({category:currentCategory,description,breakdown,amount});sum+=amount;hasAmount=true;}
  }
  if(hasAmount)calculatedBudget=sum;
  }else{warnings.push('ไม่พบตารางงบประมาณรูปแบบ RS-1');}
  if(budgetTable&&budgetItems.length===0)warnings.push('พบตารางงบประมาณ แต่ยังไม่มีรายการที่กรอกจำนวนเงิน');
  if(totalBudget.value!==null && calculatedBudget!==null && Number(totalBudget.value)!==calculatedBudget){totalBudget.status='review';totalBudget.warning=`ยอดรวมในเอกสาร ${totalBudget.value} ไม่ตรงผลรวมรายการ ${calculatedBudget}`;warnings.push(totalBudget.warning);}
  const required={projectTitleTH,projectTitleEN,principalInvestigator,coResearchers:coResearcherField,strategy,durationStart,durationEnd,researchType,keywordsTH,keywordsEN,objectives,expectedOutcomes,totalBudget,significance,literature,references,methodology,scope,progress,integration,otherNotes,advisor,collaboration,transfer,schedule};
- const completeness=Object.values(required).every(value=>value.status==='found');
+ const mandatoryKeys=['projectTitleTH','projectTitleEN','principalInvestigator','strategy','durationStart','durationEnd','researchType','objectives','methodology','totalBudget'] as const;
+ const completeness=mandatoryKeys.every(key=>required[key].status==='found');
  const documentCompleteness:Field={value:completeness?'ครบถ้วน':'ต้องตรวจสอบ',status:completeness?'found':'review',source:'ตรวจจากฟิลด์ทะเบียน RS-1'};
  const fields={...required,documentCompleteness};
- for(const [key,value] of Object.entries(fields)) if(value.status==='missing')warnings.push(`ไม่พบข้อมูล ${key} กรุณากรอกเอง`);
+ for(const key of mandatoryKeys)if(fields[key].status==='missing')warnings.push(`ไม่พบข้อมูลที่จำเป็น ${key} กรุณาตรวจสอบ`);
  if(documentCompleteness.status==='review')warnings.push('ข้อมูลทะเบียน RS-1 ยังไม่ครบทุกฟิลด์ ควรตรวจสอบเอกสารต้นฉบับ');
  const all=[...p,...doc.tables.flat(2)].join('\n');
  const thaiChecks={replacementCharacter:all.includes('\uFFFD'),zeroWidthCharacters:/[\u200B\u200C\u200D\uFEFF]/u.test(all),isolatedCombiningMarks:/(?:^|[\s\r\n])[\u0E31\u0E34-\u0E3A\u0E47-\u0E4E]/u.test(all)};

@@ -46,6 +46,22 @@ function fillParagraphs(xml:string,values:Map<number,string>,appends:Map<number,
   return result;
  });
 }
+// Expand the original one-person RS-1 table without changing its other fixed positions.
+// Add well-labelled paragraphs after the first co-researcher block.
+function insertAdditionalCoResearchers(xml:string,people:Person[]){
+ if(people.length<=1)return xml;
+ const extra=people.slice(1).map(person=>[
+  ['ชื่อ-สกุล',person.name],['สังกัดหน่วยงาน',person.affiliation],
+  ['เบอร์โทรศัพท์ที่ติดต่อได้',person.phone],['อีเมล',person.email],
+  ['ความรับผิดชอบต่อโครงการที่เสนอ',person.responsibility],
+  ['คิดเป็นสัดส่วนการวิจัยร้อยละ',person.share]
+ ].map(([label,value])=>`<w:p><w:r><w:t xml:space="preserve">${escapeXml(`${label}: ${text(value)}`)}</w:t></w:r></w:p>`).join('')).join('');
+ let index=0;
+ return xml.replace(/<w:p(?:\s[^>]*)?>[\s\S]*?<\/w:p>/g,p=>{
+  const current=index++;
+  return current===26?p+extra:p;
+ });
+}
 function removeUnusedBudgetRows(xml:string){
  return xml.replace(/<w:tr(?:\s[^>]*)?>[\s\S]*?<\/w:tr>/g,row=>row.includes('__REMOVE_BUDGET_ROW__')?'':row);
 }
@@ -65,7 +81,9 @@ function fields(form:FormData){
  for(const group of budgetGroups){const rows=entered.filter(row=>text(row.category)===group.category);if(!rows.length)values.set(group.header,'__REMOVE_BUDGET_ROW__');group.slots.forEach((slot,i)=>{const row=rows[i];if(!row){values.set(slot,'__REMOVE_BUDGET_ROW__');return;}values.set(slot,[text(row.description),text(row.breakdown)].filter(Boolean).join(' — '));values.set(slot+1,text(row.amount))})}
  const total=entered.reduce((sum,row)=>sum+(Number(text(row.amount).replace(/,/g,''))||0),0);values.set(152,total?total.toLocaleString('th-TH'):'0' );
  const publication=text(form.publication),standards=new Set(form.researchStandard??[]),strategy=text(form.strategy);
- const checks=new Map<number,boolean>([[6,strategy==='1'||strategy.startsWith('1.')],[7,strategy==='2'||strategy.startsWith('2.')],[8,strategy==='3'||strategy.startsWith('3.')],[9,strategy==='4'||strategy.startsWith('4.')],[10,strategy==='5'||strategy.startsWith('5.')],[67,publication==='international-journal'],[68,publication==='national-journal'],[69,publication==='international-conference'],[70,publication==='intellectual-property'],[71,publication==='other'],[80,text(form.transfer).includes('ระดับภูมิภาค')],[81,text(form.transfer).includes('เฉพาะกลุ่มอาชีพ')],[82,text(form.transfer).includes('ไม่มีการนำไป')],[155,standards.has('none')],[156,standards.has('human')],[157,standards.has('animal')],[158,standards.has('plant')]]);
+ const strategies=['สอดคล้องกับคุณวุฒิ หรือสาขาวิชา หรือภาระงาน','การพัฒนากำลังคนและสถาบันความรู้','การวิจัยและสร้างนวัตกรรมเพื่อตอบโจทย์ท้าทายของสังคม','การวิจัยและสร้างนวัตกรรมเพื่อเพิ่มขีดความสามารถการแข่งขัน','การวิจัยและสร้างนวัตกรรมเพื่อการพัฒนาเชิงพื้นที่และลดความเหลื่อมล้ำ'];
+ const strategyId=Number(strategy.match(/^(?:strategy_)?([1-5])(?:\.|$)/)?.[1]??(strategies.indexOf(strategy)+1));
+ const checks=new Map<number,boolean>([[6,strategyId===1],[7,strategyId===2],[8,strategyId===3],[9,strategyId===4],[10,strategyId===5],[67,publication==='international-journal'],[68,publication==='national-journal'],[69,publication==='international-conference'],[70,publication==='intellectual-property'],[71,publication==='other'],[80,text(form.transfer).includes('ระดับภูมิภาค')],[81,text(form.transfer).includes('เฉพาะกลุ่มอาชีพ')],[82,text(form.transfer).includes('ไม่มีการนำไป')],[155,standards.has('none')],[156,standards.has('human')],[157,standards.has('animal')],[158,standards.has('plant')]]);
  return {values,appends,checks};
 }
 
@@ -76,7 +94,7 @@ export async function POST(request:Request){
   const zip=await JSZip.loadAsync(template);
   const document=zip.file('word/document.xml');if(!document)throw new Error('ไม่พบโครงสร้างเอกสาร Word');
   const xml=await document.async('string');const {values,appends,checks}=fields(form);
-  zip.file('word/document.xml',removeUnusedBudgetRows(fillParagraphs(xml,values,appends,checks)));
+  zip.file('word/document.xml',removeUnusedBudgetRows(insertAdditionalCoResearchers(fillParagraphs(xml,values,appends,checks),form.coResearchers??[])));
   const output=await zip.generateAsync({type:'uint8array',compression:'DEFLATE'});
   const body=output.buffer.slice(output.byteOffset,output.byteOffset+output.byteLength) as ArrayBuffer;
   return new NextResponse(body,{headers:{'Content-Type':'application/vnd.openxmlformats-officedocument.wordprocessingml.document','Content-Disposition':"attachment; filename*=UTF-8''RS-1-filled.docx",'Cache-Control':'no-store'}});
