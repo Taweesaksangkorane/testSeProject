@@ -2,6 +2,7 @@
 
 import {Fragment, useState, type ChangeEvent} from 'react';
 import type {Extraction, Expert} from '../lib/extract';
+import {parseCollaboration} from '../lib/import-mapping';
 
 type Researcher={name:string;affiliation:string;phone:string;email:string;responsibility:string;share:string};
 type ExpertForm=Expert;
@@ -75,15 +76,7 @@ function importedAdvisor(value:string){
  return {name,qualification,academicPosition,affiliation};
 }
 function importedCollaboration(value:string):Collaboration{
- const text=value.replace(/\r/g,'').trim();
- if(!text)return blankCollaboration();
- const allLabels='ชื่อบุคคล|ผู้ประสานงาน(?:ภายนอก)?|ชื่อหน่วยงาน|หน่วยงาน|ที่อยู่(?:สำหรับตัวอย่าง)?|อีเมล|ลักษณะความร่วมมือ(?:ทางวิจัย)?';
- const read=(labels:string)=>text.match(new RegExp(`(?:^|\\n|\\s)(?:${labels})\\s*[:：-]\\s*([\\s\\S]*?)(?=\\s*(?:${allLabels})\\s*[:：-]|$)`,'i'))?.[1]?.trim()??'';
- const person=read('ชื่อบุคคล|ผู้ประสานงาน(?:ภายนอก)?');
- const organization=read('ชื่อหน่วยงาน|หน่วยงาน');
- const address=read('ที่อยู่(?:สำหรับตัวอย่าง)?');
- const description=read('ลักษณะความร่วมมือ(?:ทางวิจัย)?');
- return {person,organization,address,description:description||(!person&&!organization&&!address?text:'')};
+ return parseCollaboration(value);
 }
 function importedTransfer(extraction:Extraction){const text=value(extraction,'transfer');if(text.includes('ไม่มีการนำไปถ่ายทอด'))return 'ไม่มีการนำไปถ่ายทอดสู่สังคม';if(text.includes('เฉพาะกลุ่มอาชีพ'))return 'ถ่ายทอดเป็นต้นแบบและแนวทางได้เฉพาะกลุ่มอาชีพ ชุมชน หรือจังหวัด';if(text.includes('ระดับภูมิภาค'))return 'ถ่ายทอดเป็นต้นแบบและแนวทางได้ในระดับภูมิภาค ประเทศ หรือนานาชาติ';return '';}
 function importedSchedule(extraction:Extraction){
