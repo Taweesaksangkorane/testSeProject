@@ -10,6 +10,30 @@ export type DocContent = {blocks:DocBlock[]; paragraphs:string[]; paragraphDetai
 // Important for Thai combining marks spread across Word runs.
 type XmlNode = Record<string, any>;
 const parser = new XMLParser({preserveOrder:true, ignoreAttributes:false, trimValues:false, processEntities:true});
+const checkedTextMarks=new Set(['☑','☒','✓','✔','✅','✗','✘','■','●','◉','⦿']);
+const uncheckedTextMarks=new Set(['☐','□','▢','⬜','○','◯']);
+function booleanState(raw:string):CheckboxMark['state'] {
+  return /^(?:1|true|on|yes|checked)$/i.test(raw)?'checked'
+    : /^(?:0|false|off|no|unchecked)$/i.test(raw)?'unchecked'
+    : 'unknown';
+}
+function nestedAttribute(nodes:XmlNode[],tags:Set<string>):string|null {
+  for(const node of nodes){
+    for(const [tag,value] of Object.entries(node)){
+      if(tag===':@')continue;
+      if(tags.has(tag)){
+        const attrs=(node[':@']??{}) as Record<string,string>;
+        const raw=attrs['@_w:val']??attrs['@_w14:val']??attrs['@_val'];
+        if(raw!==undefined)return raw;
+      }
+      if(Array.isArray(value)){
+        const nested=nestedAttribute(value,tags);
+        if(nested!==null)return nested;
+      }
+    }
+  }
+  return null;
+}
 function getNodeContents(list:XmlNode[], tag:string):XmlNode[][] {
   const found:XmlNode[][]=[];
   for(const node of list){ if(Array.isArray(node[tag])) found.push(node[tag]); }
@@ -40,13 +64,19 @@ function checkboxMarks(nodes:XmlNode[]):CheckboxMark[] {
         const attrs=(node[':@']??{}) as Record<string,string>;
         const code=(attrs['@_w:char']??'').toUpperCase();
         const font=attrs['@_w:font']??'';
-        const state=code==='F0FE'||code==='F0FC'||code==='2611'||code==='2612'||code==='2713'||code==='2714'
+        // Word stores checkbox glyphs as font-specific symbol codes. In
+        // Wingdings 2, P (F050) is a check mark and R (F052) is a checked box.
+        const state=code==='F050'||code==='F052'||code==='F0FE'||code==='F0FC'||code==='2611'||code==='2612'||code==='2713'||code==='2714'
           ? 'checked' : code==='F0A8'||code==='2610' ? 'unchecked' : 'unknown';
         marks.push({state,code,font});
       } else if(tag==='w14:checked'){
         const attrs=(node[':@']??{}) as Record<string,string>;
         const raw=attrs['@_w14:val']??attrs['@_w:val']??'';
-        marks.push({state:/^(?:1|true|on)$/i.test(raw)?'checked':/^(?:0|false|off)$/i.test(raw)?'unchecked':'unknown',code:raw,font:'OOXML-content-control'});
+        marks.push({state:booleanState(raw),code:raw,font:'OOXML-content-control'});
+      } else if(tag==='w:checkBox'&&Array.isArray(value)){
+        // Legacy Word form fields store their state under w:ffData/w:checkBox.
+        const raw=nestedAttribute(value,new Set(['w:checked','w:default']))??'';
+        marks.push({state:booleanState(raw),code:raw,font:'OOXML-legacy-form-field'});
       } else if(Array.isArray(value)) marks.push(...checkboxMarks(value));
     }
   }
@@ -55,10 +85,12 @@ function checkboxMarks(nodes:XmlNode[]):CheckboxMark[] {
 function paraInfo(p:XmlNode[]):ParagraphInfo {
   const text=inlineText(p).replace(/\u00a0/g,' ').normalize('NFC').trim();
   const checkboxes=checkboxMarks(p);
-  // A checkbox pasted as a Unicode character has no w:sym metadata.
+  // Pasted Unicode checkboxes and radio buttons have no OOXML state metadata.
   if(!checkboxes.length){
-    if(/^[☑☒✓✔]/u.test(text))checkboxes.push({state:'checked',code:text[0],font:'Unicode'});
-    else if(/^[☐□]/u.test(text))checkboxes.push({state:'unchecked',code:text[0],font:'Unicode'});
+    const match=text.match(/^\s*(?:[-–—•·]\s*)?([☑☒✓✔✅✗✘■●◉⦿☐□▢⬜○◯])/u);
+    const mark=match?.[1];
+    if(mark&&checkedTextMarks.has(mark))checkboxes.push({state:'checked',code:mark,font:'Unicode'});
+    else if(mark&&uncheckedTextMarks.has(mark))checkboxes.push({state:'unchecked',code:mark,font:'Unicode'});
   }
   return {text,checkboxes};
 }

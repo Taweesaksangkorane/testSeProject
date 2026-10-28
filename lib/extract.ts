@@ -68,7 +68,7 @@ function firstDate(text:string,which:'start'|'end'):string|null {
 }
 function selectedCheckbox(text:string,marks:{state:string}[]):boolean {
  if(marks.some(mark=>mark.state==='checked'))return true;
- return /^\s*(?:✓|☑|☒|✔|\uF0FE|\uF0FC)/u.test(text);
+ return /^\s*(?:[-–—•·]\s*)?(?:☑|☒|✓|✔|✅|✗|✘|■|●|◉|⦿|\uF0FE|\uF0FC)/u.test(text);
 }
 function peopleInSection(lines:string[]):Person[] {
  const result:Person[]=[];
@@ -276,13 +276,13 @@ export function extractRs1(doc:DocContent):Extraction {
  const schedule=make([...scheduleIntro,...scheduleRows].filter(Boolean).join('\n')||null,'ส่วนแผนการดำเนินงาน');
  const checkboxText=(text:string)=>text
   .replace(/^\s*\d+[.)]?\s*/u,'')
-  .replace(/^\s*(?:✓|☑|☒|☐|\uF0FE|\uF0FC)\s*/u,'')
+  .replace(/^\s*(?:[-–—•·]\s*)?(?:☑|☒|✓|✔|✅|✗|✘|■|●|◉|⦿|☐|□|▢|⬜|○|◯|\uF0FE|\uF0FC)\s*/u,'')
   .trim();
  const selected=(pattern:RegExp):boolean=>details.some(detail=>pattern.test(checkboxText(detail.text))&&(
   selectedCheckbox(detail.text,detail.checkboxes)
  ));
  const hasCheckboxes=(patterns:RegExp[]):boolean=>details.some(detail=>patterns.some(pattern=>pattern.test(checkboxText(detail.text)))&&(
-  detail.checkboxes.length>0||/^\s*(?:✓|☑|☒|☐)/u.test(detail.text)
+  detail.checkboxes.length>0||/^\s*(?:[-–—•·]\s*)?(?:☑|☒|✓|✔|✅|✗|✘|■|●|◉|⦿|☐|□|▢|⬜|○|◯)/u.test(detail.text)
  ));
  const standardOptions=[
   {value:'none',pattern:/^ไม่มีการทำวิจัยในมนุษย์/},
