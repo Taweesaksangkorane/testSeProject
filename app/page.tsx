@@ -2,7 +2,7 @@
 
 import {Fragment, useState, type ChangeEvent} from 'react';
 import type {Extraction, Expert} from '../lib/extract';
-import {parseCollaboration} from '../lib/import-mapping';
+import {parseAdvisor,parseCollaboration} from '../lib/import-mapping';
 
 type Researcher={name:string;affiliation:string;phone:string;email:string;responsibility:string;share:string};
 type ExpertForm=Expert;
@@ -57,23 +57,7 @@ function importedDate(value:string){
  return `${year.toString().padStart(4,'0')}-${String(month).padStart(2,'0')}-${String(day).padStart(2,'0')}`;
 }
 function importedAdvisor(value:string){
- const delimiter=value.includes(';')?/\s*;\s*/:/\s*,\s*/;
- const parts=value.split(delimiter).map(item=>item.trim()).filter(Boolean);
- const positionPattern=/^(ศาสตราจารย์|รองศาสตราจารย์|ผู้ช่วยศาสตราจารย์|อาจารย์|ศ\.|รศ\.|ผศ\.|อ\.)\s*/;
- const degreePattern=/(?:ปริญญา|ปร\.ด\.|วท\.ด\.|กศ\.ด\.|ศษ\.ด\.|ค\.ด\.|Ph\.?D\.?|Ed\.?D\.?|วท\.ม\.|ศษ\.ม\.|กศ\.ม\.|M\.?[A-Za-z]*\.?|วท\.บ\.|ศษ\.บ\.|กศ\.บ\.|B\.?[A-Za-z]*\.?)/i;
- const organizationPattern=/(?:มหาวิทยาลัย|สำนักวิชา|คณะ|วิทยาลัย|สถาบัน|ศูนย์|หน่วยงาน|โรงพยาบาล|บริษัท|กรม|กระทรวง)/;
- let name=parts.shift()??'',qualification='',academicPosition='',affiliation='';
- const prefixedPosition=name.match(positionPattern);
- if(prefixedPosition){academicPosition=prefixedPosition[1];name=name.slice(prefixedPosition[0].length).trim();}
- for(const part of parts){
-  const standalonePosition=part.match(positionPattern);
-  if(!academicPosition&&standalonePosition&&standalonePosition[0].trim()===part){academicPosition=standalonePosition[1];continue;}
-  if(!qualification&&degreePattern.test(part)){qualification=part;continue;}
-  if(organizationPattern.test(part)||affiliation){affiliation=[affiliation,part].filter(Boolean).join(', ');continue;}
-  if(!academicPosition&&standalonePosition){academicPosition=standalonePosition[1];continue;}
-  affiliation=[affiliation,part].filter(Boolean).join(', ');
- }
- return {name,qualification,academicPosition,affiliation};
+ return parseAdvisor(value);
 }
 function importedCollaboration(value:string):Collaboration{
  return parseCollaboration(value);

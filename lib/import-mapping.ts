@@ -1,4 +1,58 @@
 export type CollaborationParts={person:string;organization:string;address:string;description:string};
+export type AdvisorParts={name:string;qualification:string;academicPosition:string;affiliation:string};
+
+const academicPositionPattern=/^(ศาสตราจารย์|รองศาสตราจารย์|ผู้ช่วยศาสตราจารย์|อาจารย์|ศ\.|รศ\.|ผศ\.|อ\.)\s*[,;:：-]?\s*/u;
+const degreePattern=/(?:ปริญญา|ปร\.ด\.|วท\.ด\.|กศ\.ด\.|ศษ\.ด\.|ค\.ด\.|Ph\.?D\.?|Ed\.?D\.?|วท\.ม\.|ศษ\.ม\.|กศ\.ม\.|M\.?[A-Za-z]*\.?|วท\.บ\.|ศษ\.บ\.|กศ\.บ\.|B\.?[A-Za-z]*\.?)/i;
+const organizationPattern=/(?:มหาวิทยาลัย|สำนักวิชา|คณะ|วิทยาลัย|สถาบัน|ศูนย์|หน่วยงาน|โรงพยาบาล|บริษัท|กรม|กระทรวง)/u;
+function fullAcademicPosition(value:string):string {
+ const normalized=value.trim();
+ const positions:Record<string,string>={
+  'ศ.':'ศาสตราจารย์',
+  'รศ.':'รองศาสตราจารย์',
+  'ผศ.':'ผู้ช่วยศาสตราจารย์',
+  'อ.':'อาจารย์'
+ };
+ return positions[normalized]??normalized;
+}
+
+export function parseAdvisor(value:string):AdvisorParts {
+ const text=value.replace(/\r/g,'').trim();
+ const advisorLabels='ชื่อบุคคล|ชื่อที่ปรึกษา|คุณวุฒิ|วุฒิการศึกษา|ตำแหน่งทางวิชาการ|ตำแหน่ง|สังกัดหน่วยงาน|สังกัด';
+ const labelled=(labels:string)=>text.match(new RegExp(`(?:^|\\n|\\s)(?:${labels})\\s*(?:[:：=-]\\s*|\\n\\s*)([\\s\\S]*?)(?=\\s*(?:${advisorLabels})\\s*(?:[:：=-]\\s*|\\n\\s*)|$)`,'i'))?.[1]?.trim()??'';
+ const labelledResult:AdvisorParts={
+  name:labelled('ชื่อบุคคล|ชื่อที่ปรึกษา'),
+  qualification:labelled('คุณวุฒิ|วุฒิการศึกษา'),
+  academicPosition:labelled('ตำแหน่งทางวิชาการ|ตำแหน่ง'),
+  affiliation:labelled('สังกัดหน่วยงาน|สังกัด')
+ };
+ if(Object.values(labelledResult).some(Boolean)){
+  const position=labelledResult.affiliation.match(academicPositionPattern);
+  if(position){
+   if(!labelledResult.academicPosition)labelledResult.academicPosition=fullAcademicPosition(position[1]);
+   labelledResult.affiliation=labelledResult.affiliation.slice(position[0].length).trim();
+  }
+  labelledResult.academicPosition=fullAcademicPosition(labelledResult.academicPosition);
+  return labelledResult;
+ }
+ const parts=text.split(/\s*(?:;|\n|,)\s*/).map(item=>item.trim()).filter(Boolean);
+ let name=parts.shift()??'',qualification='',academicPosition='',affiliation='';
+ const namePosition=name.match(academicPositionPattern);
+ if(namePosition){academicPosition=fullAcademicPosition(namePosition[1]);name=name.slice(namePosition[0].length).trim();}
+ for(const rawPart of parts){
+  let part=rawPart;
+  const position=part.match(academicPositionPattern);
+  if(position){
+   if(!academicPosition)academicPosition=fullAcademicPosition(position[1]);
+   // Always remove a repeated/full position before classifying affiliation.
+   part=part.slice(position[0].length).trim();
+   if(!part)continue;
+  }
+  if(!qualification&&degreePattern.test(part)){qualification=part;continue;}
+  if(organizationPattern.test(part)||affiliation){affiliation=[affiliation,part].filter(Boolean).join(', ');continue;}
+  affiliation=[affiliation,part].filter(Boolean).join(', ');
+ }
+ return {name,qualification,academicPosition,affiliation};
+}
 
 const blank=():CollaborationParts=>({person:'',organization:'',address:'',description:''});
 const labelAliases={
