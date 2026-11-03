@@ -71,11 +71,14 @@ function detectPart(s:string):Part|null{
 function detectHeading(s:string,part:Part){
  const {n,rest}=getNumber(s);
  for(const spec of specs){
-  if(spec.part!==part || (n!==null && n!==spec.number))continue;
+  if(spec.part!==part)continue;
   for(const alias of spec.names){
    const m=rest.match(alias);
    if(!m)continue;
    if(n===null && rest.length>150 && part!=='B')continue;
+   // Labels win over section numbers: reordered or renumbered templates
+   // still map to the same canonical RS-1 field.
+   if(n!==null && n!==spec.number && m[0].length<10)continue;
    const trailing=rest.slice(m[0].length);
    const explicit=trailing.match(/^\s*[:：]\s*(.+)$/u);
    const suffix=explicit?.[1]?.trim()??(part==='B'&&spec.number===1&&trailing.length<100?trailing.trim():'');
