@@ -5,7 +5,17 @@ import WordExtractor from 'word-extractor';
 export type DocBlock = { type: 'paragraph'; text: string } | {type:'table'; rows: string[][]};
 export type CheckboxMark = {state:'checked'|'unchecked'|'unknown'; code:string; font:string};
 export type ParagraphInfo = {text:string; checkboxes:CheckboxMark[]};
-export type DocContent = {blocks:DocBlock[]; paragraphs:string[]; paragraphDetails:ParagraphInfo[]; tables:string[][][]};
+export type SourceDocumentBlock =
+ | {id:string;index:number;type:'paragraph';text:string;checkboxes:CheckboxMark[]}
+ | {id:string;index:number;type:'table';rows:string[][];checkboxes:CheckboxMark[]};
+export type SourceDocumentJson = {
+ version:1;
+ sourceType:'docx'|'doc';
+ text:string;
+ blocks:SourceDocumentBlock[];
+ stats:{paragraphs:number;tables:number;checkboxes:number};
+};
+export type DocContent = {blocks:DocBlock[]; paragraphs:string[]; paragraphDetails:ParagraphInfo[]; tables:string[][][]; sourceDocument:SourceDocumentJson};
 // preserveOrder keeps adjacent w:t fragments in their original XML order.
 // Important for Thai combining marks spread across Word runs.
 type XmlNode = Record<string, any>;
@@ -127,19 +137,36 @@ export async function readDocx(data: Buffer):Promise<DocContent> {
   if(!docNode) throw new Error('DOCX XML ไม่ถูกต้อง');
   const body=getNodeContents(docNode['w:document'],'w:body')[0]??[];
   const blocks:DocBlock[]=[];
+  const blockCheckboxes:CheckboxMark[][]=[];
   const paragraphDetails:ParagraphInfo[]=[];
   for(const n of body){
-    if(n['w:p']) {const info=paraInfo(n['w:p']);if(info.text) {blocks.push({type:'paragraph',text:info.text});paragraphDetails.push(info);}}
+    if(n['w:p']) {const info=paraInfo(n['w:p']);if(info.text) {blocks.push({type:'paragraph',text:info.text});blockCheckboxes.push(info.checkboxes);paragraphDetails.push(info);}}
     if(n['w:tbl']) {
       const rows=table(n['w:tbl']);
+      const tableMarks:CheckboxMark[]=[];
       for(const p of collectParagraphNodes(n['w:tbl'])){
         const info=paraInfo(p);
-        if(info.text) paragraphDetails.push(info);
+        if(info.text){paragraphDetails.push(info);tableMarks.push(...info.checkboxes);}
       }
-      if(rows.length) blocks.push({type:'table',rows});
+      if(rows.length){blocks.push({type:'table',rows});blockCheckboxes.push(tableMarks);}
     }
   }
-  return {blocks, paragraphs:paragraphDetails.map(x=>x.text), paragraphDetails, tables:blocks.filter(x=>x.type==='table').map(x=>x.rows)};
+  const paragraphs=paragraphDetails.map(x=>x.text);
+  const tables=blocks.filter(x=>x.type==='table').map(x=>x.rows);
+  let paragraphIndex=0,tableIndex=0;
+  const sourceBlocks:SourceDocumentBlock[]=blocks.map((block,index)=>{
+    if(block.type==='table')return {id:`table-${++tableIndex}`,index,type:'table',rows:block.rows,checkboxes:blockCheckboxes[index]??[]};
+    paragraphIndex++;
+    return {id:`paragraph-${paragraphIndex}`,index,type:'paragraph',text:block.text,checkboxes:blockCheckboxes[index]??[]};
+  });
+  const sourceDocument:SourceDocumentJson={
+    version:1,
+    sourceType:'docx',
+    text:blocks.map(block=>block.type==='paragraph'?block.text:block.rows.map(row=>row.join('\t')).join('\n')).join('\n'),
+    blocks:sourceBlocks,
+    stats:{paragraphs:paragraphDetails.length,tables:tables.length,checkboxes:paragraphDetails.reduce((sum,item)=>sum+item.checkboxes.length,0)}
+  };
+  return {blocks,paragraphs,paragraphDetails,tables,sourceDocument};
 }
 
 export async function readLegacyDoc(data: Buffer):Promise<DocContent> {
@@ -148,10 +175,12 @@ export async function readLegacyDoc(data: Buffer):Promise<DocContent> {
   const body=document.getBody().replace(/\r/g,'');
   const paragraphs=body.split(/\n+/).map((text:string)=>text.trim()).filter(Boolean);
   const paragraphDetails=paragraphs.map((text:string)=>({text,checkboxes:[]}));
+  const blocks=paragraphs.map((text:string)=>({type:'paragraph' as const,text}));
   return {
-    blocks:paragraphs.map((text:string)=>({type:'paragraph' as const,text})),
+    blocks,
     paragraphs,
     paragraphDetails,
-    tables:[]
+    tables:[],
+    sourceDocument:{version:1,sourceType:'doc',text:paragraphs.join('\n'),blocks:blocks.map((block,index)=>({id:`paragraph-${index+1}`,index,type:'paragraph',text:block.text,checkboxes:[]})),stats:{paragraphs:paragraphs.length,tables:0,checkboxes:0}}
   };
 }

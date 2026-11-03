@@ -1,4 +1,4 @@
-import type {DocContent} from './docx';
+import type {DocContent,SourceDocumentJson} from './docx';
 export type Field = {value:string|null; status:'found'|'missing'|'review'; source:string|null; warning?:string};
 export type Person = {name:string; affiliation:string; phone:string; email:string; responsibility:string; share:string};
 export type Biography = {thaiName:string;englishName:string;academicPosition:string;nationalId:string;education:string;employment:string;expertise:string;publications:string;presentations:string;intellectualProperty:string;researchManagementExperience:string;completedResearch:string;ongoingResearch:string};
@@ -8,7 +8,7 @@ export type Extraction = {fields:{
  durationStart:Field;durationEnd:Field;researchType:Field;keywordsTH:Field;keywordsEN:Field;
  objectives:Field;expectedOutcomes:Field;totalBudget:Field;documentCompleteness:Field;advisor:Field;collaboration:Field;transfer:Field;schedule:Field;
  significance:Field;literature:Field;references:Field;methodology:Field;scope:Field;progress:Field;integration:Field;otherNotes:Field;
-};principalDetails:Person;coResearchers:Person[];biographies:Biography[];experts:Expert[];researchStandards:string[];publicationType:string|null;checkboxStatus:'found'|'ambiguous'|'unavailable';budgetItems:{category:string;description:string;breakdown:string;amount:number|null}[];calculatedBudget:number|null;warnings:string[];thaiChecks:{replacementCharacter:boolean;zeroWidthCharacters:boolean;isolatedCombiningMarks:boolean};metadata:{paragraphCount:number;tableCount:number}};
+};principalDetails:Person;coResearchers:Person[];biographies:Biography[];experts:Expert[];researchStandards:string[];publicationType:string|null;checkboxStatus:'found'|'ambiguous'|'unavailable';budgetItems:{category:string;description:string;breakdown:string;amount:number|null}[];calculatedBudget:number|null;warnings:string[];thaiChecks:{replacementCharacter:boolean;zeroWidthCharacters:boolean;isolatedCombiningMarks:boolean};metadata:{paragraphCount:number;tableCount:number};sourceDocument:SourceDocumentJson};
 const empty=():Field=>({value:null,status:'missing',source:null});
 const clean=(s:string)=>s.replace(/\u00a0/g,' ').trim();
 const withoutPlaceholder=(s:string)=>clean(s).replace(/^[.…\s:_-]+|[.…\s:_-]+$/g,'').trim();
@@ -215,6 +215,18 @@ export function extractRs1(doc:DocContent):Extraction {
   if(th){let v=withoutPlaceholder(th[1]);if(!v && titleScope[i+1]&&!/ภาษาอังกฤษ/.test(titleScope[i+1]))v=withoutPlaceholder(titleScope[i+1]);projectTitleTH=make(v,`ย่อหน้า: ${(titleSectionStart>=0?titleSectionStart+1:0)+i+1}`);}
   if(en){let v=withoutPlaceholder(en[1]);if(!v && titleScope[i+1]&&!/ยุทธศาสตร์|ส่วน\s*ก/.test(titleScope[i+1]))v=withoutPlaceholder(titleScope[i+1]);projectTitleEN=make(v,`ย่อหน้า: ${(titleSectionStart>=0?titleSectionStart+1:0)+i+1}`);}
  }
+ // Some real RS-1 files place the Thai and English titles directly below
+ // "ชื่อโครงการ" without language labels. Preserve that common layout by
+ // classifying only the first two short lines inside the title section.
+ if(projectTitleTH.status==='missing'||projectTitleEN.status==='missing'){
+  const candidates=titleScope
+   .map((value,index)=>({value:withoutPlaceholder(value).replace(/^[“”"']+|[“”"']+$/g,'').trim(),index}))
+   .filter(item=>item.value&&item.value.length<=500&&!/^(?:\(?ภาษาไทย\)?|\(?ภาษาอังกฤษ\)?|ระบุความสอดคล้อง|ส่วน\s*ก\s*:)/.test(item.value));
+  const thai=candidates.find(item=>/[ก-๙]/u.test(item.value));
+  const english=candidates.find(item=>/[A-Za-z]/.test(item.value)&&!/[ก-๙]/u.test(item.value));
+  if(projectTitleTH.status==='missing'&&thai)projectTitleTH=make(thai.value,`ย่อหน้า: ${titleSectionStart+thai.index+2} (ชื่อโครงการแบบไม่มีป้ายภาษา)`);
+  if(projectTitleEN.status==='missing'&&english)projectTitleEN=make(english.value,`ย่อหน้า: ${titleSectionStart+english.index+2} (ชื่อโครงการแบบไม่มีป้ายภาษา)`);
+ }
  // Parse each person in one pass; never increment an index before creating its record.
  const coStart=p.findIndex(s=>heading(s,/^ผู้ร่วมโครงการวิจัย/));
  const coEnd=p.findIndex((s,i)=>i>coStart&&heading(s,/^ที่ปรึกษาโครงการวิจัย/));
@@ -347,5 +359,5 @@ export function extractRs1(doc:DocContent):Extraction {
  if(thaiChecks.replacementCharacter)warnings.push('พบอักขระทดแทน � ซึ่งอาจหมายถึงข้อความที่ถอดรหัสผิด');
  if(thaiChecks.zeroWidthCharacters)warnings.push('พบอักขระ Zero-width ในภาษาไทย ควรตรวจสอบก่อนแก้ไข');
  if(thaiChecks.isolatedCombiningMarks)warnings.push('พบสระหรือวรรณยุกต์ไทยแยกเดี่ยว ควรตรวจสอบต้นฉบับ');
- return {fields,principalDetails,coResearchers,biographies,experts,researchStandards,publicationType:selectedPublication,checkboxStatus,budgetItems,calculatedBudget,warnings,thaiChecks,metadata:{paragraphCount:p.length,tableCount:doc.tables.length}};
+ return {sourceDocument:doc.sourceDocument,fields,principalDetails,coResearchers,biographies,experts,researchStandards,publicationType:selectedPublication,checkboxStatus,budgetItems,calculatedBudget,warnings,thaiChecks,metadata:{paragraphCount:p.length,tableCount:doc.tables.length}};
 }
