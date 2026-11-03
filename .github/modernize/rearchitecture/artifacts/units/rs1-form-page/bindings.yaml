@@ -1,0 +1,9 @@
+unit: rs1-form-page
+bindings:
+  - type: convention
+    name: "Next.js App Router page default export"
+    source_loc: "app/page.tsx:84"
+    target: "Home"
+    must_appear_in_target: true
+    notes: "Client component at the root route."
+runtime_config: []

@@ -1,4 +1,4 @@
-import type {DocContent} from './docx';
+import type {DocContent,SourceTable} from './docx';
 
 /**
  * Route RS-1 by semantic section headers, not page/paragraph offsets.
@@ -7,14 +7,17 @@ import type {DocContent} from './docx';
  */
 export type Rs1RoutedBlock =
   | {type:'paragraph'; sourceIndex:number; text:string}
-  | {type:'table'; sourceIndex:number; rows:string[][]};
+  | {type:'table'; sourceIndex:number; rows:string[][];table?:SourceTable};
 export type Rs1RoutedSection = {
   key:string; part:'intro'|'A'|'B'|'C'; heading:string; sourceIndex:number;
   paragraphs:string[]; tables:string[][][]; blocks:Rs1RoutedBlock[];
   text:string; matchedBy:'number-and-label'|'label';
 };
 export type Rs1SectionMap = {
-  sections:Record<string,Rs1RoutedSection>; order:string[]; warnings:string[];
+  sections:Record<string,Rs1RoutedSection>;
+  occurrences:Record<string,Rs1RoutedSection[]>;
+  order:string[];
+  warnings:string[];
 };
 type Part='intro'|'A'|'B'|'C';
 type Spec={key:string;part:Part;number:number;names:RegExp[]};
@@ -97,11 +100,11 @@ function create(key:string,part:Part,heading:string,index:number,matchedBy:Rs1Ro
  return {key,part,heading,sourceIndex:index,paragraphs:[],tables:[],blocks:[],text:'',matchedBy};
 }
 export function segmentRs1Sections(doc:Pick<DocContent,'blocks'>):Rs1SectionMap{
- const result:Rs1SectionMap={sections:{},order:[],warnings:[]};
+ const result:Rs1SectionMap={sections:{},occurrences:{},order:[],warnings:[]};
  let part:Part='intro',current:Rs1RoutedSection|null=null,hasPartMarker=false;
  doc.blocks.forEach((block,index)=>{
   if(block.type==='table'){
-   if(current)append(current,{type:'table',sourceIndex:index,rows:block.rows});
+   if(current)append(current,{type:'table',sourceIndex:index,rows:block.rows,table:block.table});
    return;
   }
   const paragraph=clean(block.text);
@@ -111,23 +114,30 @@ export function segmentRs1Sections(doc:Pick<DocContent,'blocks'>):Rs1SectionMap{
   let match=detectHeading(paragraph,part);
   if(!match&&part==='intro'&&!hasPartMarker){
    const fallback=detectHeading(paragraph,'A');
-   if(fallback?.spec.number===1){part='A';match=fallback;}
+   if(fallback){part='A';match=fallback;}
   }
   if(match){
    const key=match.spec.key;
    if(result.sections[key]){
     result.warnings.push('หัวข้อซ้ำ: '+key);
-    if(current)append(current,{type:'paragraph',sourceIndex:index,text:paragraph});
+    if(part==='B'){
+     current=create(key,part,paragraph,index,match.matchedBy);
+     result.occurrences[key].push(current);
+     result.order.push(`${key}#${result.occurrences[key].length}`);
+     if(match.suffix)append(current,{type:'paragraph',sourceIndex:index,text:match.suffix});
+    }else{
+     current=result.sections[key];
+    }
     return;
    }
    current=create(key,part,paragraph,index,match.matchedBy);
-   result.sections[key]=current;result.order.push(key);
+   result.sections[key]=current;result.occurrences[key]=[current];result.order.push(key);
    if(match.suffix)append(current,{type:'paragraph',sourceIndex:index,text:match.suffix});
    return;
   }
   if(part==='C'&&!current){
    current=create('C:reviewers','C','ส่วน ค / Part C',index,'label');
-   result.sections[current.key]=current;result.order.push(current.key);
+   result.sections[current.key]=current;result.occurrences[current.key]=[current];result.order.push(current.key);
   }
   if(current)append(current,{type:'paragraph',sourceIndex:index,text:paragraph});
  });

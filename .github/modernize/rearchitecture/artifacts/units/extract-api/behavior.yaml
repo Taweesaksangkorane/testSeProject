@@ -1,0 +1,24 @@
+unit: extract-api
+side_effects: []
+branches:
+  - source_loc: "app/api/extract/route.ts:13"
+    condition: "Multipart file is missing, empty, too large, or has an unsupported extension."
+    behavior: "Return a 400 JSON error before parsing."
+    must_preserve: true
+  - source_loc: "app/api/extract/route.ts:13"
+    condition: "Extension is .docx versus legacy .doc."
+    behavior: "Select the appropriate local parser, then run the same canonical pipeline."
+    must_preserve: true
+  - source_loc: "lib/rs1-pipeline.ts:96"
+    condition: "A section or field is missing or uncertain."
+    behavior: "Return missing/review status and warnings; never invent a value."
+    must_preserve: true
+error_paths:
+  - source_loc: "app/api/extract/route.ts:13"
+    trigger: "Parser or extraction failure."
+    outcome: "Return a 500 JSON error with no persisted upload."
+    contract: "HTTP 500 application/json {error:string}"
+    must_preserve: true
+concurrency:
+  model: async
+  tx_boundary: null

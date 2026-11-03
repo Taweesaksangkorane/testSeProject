@@ -1,0 +1,15 @@
+unit: extract-api
+bindings:
+  - type: route-declaration
+    name: "POST /api/extract"
+    source_loc: "app/api/extract/route.ts:13"
+    target: "POST"
+    must_appear_in_target: true
+    notes: "Next.js App Router convention; Node runtime required for Buffer and parsers."
+runtime_config:
+  - key: "MAX_FILE_SIZE"
+    source_loc: "app/api/extract/route.ts:7"
+    source: code
+    default_value: "10485760"
+    must_appear_in_target: true
+    notes: "Reject uploads larger than 10 MiB."

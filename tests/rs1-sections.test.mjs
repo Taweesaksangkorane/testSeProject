@@ -56,3 +56,35 @@ test('Reports missing sections instead of claiming 100% extraction',()=>{
  assert.ok(result.warnings.some(x=>x.includes('ข้อ 19')));
  assert.equal(result.sections['A:7'].text,'ทดสอบ');
 });
+
+test('Routes renumbered headings by meaning rather than original number',()=>{
+ const result=segmentRs1Sections({blocks:[
+  p('ส่วน ก : สาระสำคัญ'),p('21. การทบทวนวรรณกรรม'),p('ทบทวนเอกสารหลายฉบับ'),
+  p('22. วัตถุประสงค์ของโครงการวิจัย'),p('ศึกษาการใช้ระบบ')
+ ]});
+ assert.equal(result.sections['A:8'].text,'ทบทวนเอกสารหลายฉบับ');
+ assert.equal(result.sections['A:7'].text,'ศึกษาการใช้ระบบ');
+ assert.equal(result.sections['A:8'].matchedBy,'label');
+});
+
+test('Routes a semantic Part A heading when the template omits the Part A marker',()=>{
+ const result=segmentRs1Sections({blocks:[
+  p('6. Background and Conceptual Framework'),p('Background without a part marker'),
+  p('7. Objectives of the Research'),p('Test the modular parser')
+ ]});
+ assert.equal(result.sections['A:6'].text,'Background without a part marker');
+ assert.equal(result.sections['A:7'].text,'Test the modular parser');
+});
+
+test('Keeps repeated biography headings as separate occurrences',()=>{
+ const result=segmentRs1Sections({blocks:[
+  p('ส่วน ข : ประวัติคณะผู้วิจัย'),
+  p('1. ชื่อ-สกุล สมชาย'),p('4. ประวัติการศึกษา'),p('ปริญญาเอก'),
+  p('1. ชื่อ-สกุล สมหญิง'),p('4. ประวัติการศึกษา'),p('ปริญญาโท')
+ ]});
+ assert.equal(result.occurrences['B:1'].length,2);
+ assert.equal(result.occurrences['B:1'][0].text,'สมชาย');
+ assert.equal(result.occurrences['B:1'][1].text,'สมหญิง');
+ assert.equal(result.occurrences['B:4'][0].text,'ปริญญาเอก');
+ assert.equal(result.occurrences['B:4'][1].text,'ปริญญาโท');
+});

@@ -31,11 +31,55 @@ test('schedule extractor keeps activity and checked month labels',()=>{
   assert.deepEqual(evidence.value?.map(item=>[item.activity,item.months]),[['เก็บข้อมูล',['ม.ค.']],['วิเคราะห์',['ก.พ.']]]);
 });
 
+test('two-column schedule keeps period but does not treat blank template rows as data',()=>{
+  const filled=[['กิจกรรมวิจัย','ระยะเวลา'],['1. เก็บข้อมูล','มกราคม - มีนาคม']];
+  const found=extractSchedule({key:'A:12',part:'A',heading:'แผนงาน',sourceIndex:0,paragraphs:[],text:'',matchedBy:'label',blocks:[{type:'table',sourceIndex:1,rows:filled}],tables:[filled]});
+  assert.equal(found.status,'found');
+  assert.equal(found.value[0].activity,'เก็บข้อมูล');
+  assert.equal(found.value[0].period,'มกราคม - มีนาคม');
+  const blank=[['Task','Period'],['1.......',''],['2.......','']];
+  const review=extractSchedule({key:'A:12',part:'A',heading:'Work plan',sourceIndex:0,paragraphs:[],text:'',matchedBy:'label',blocks:[{type:'table',sourceIndex:1,rows:blank}],tables:[blank]});
+  assert.equal(review.status,'review');
+  assert.equal(review.value,null);
+});
+
+test('matrix schedule uses checkbox evidence from the original table cell',()=>{
+  const rows=[['กิจกรรมวิจัย','เดือนที่','ผู้รับผิดชอบ'],['','1','2',''],['เก็บข้อมูล','','','หัวหน้าโครงการ']];
+  const cells=rows.map(row=>({cells:row.map(text=>({text,columnSpan:1,verticalMerge:null,widthTwips:null,checkboxes:[],images:[]}))}));
+  cells[2].cells[1].checkboxes.push({state:'checked',code:'F052',font:'Wingdings 2'});
+  const tableEvidence={rows,structuredRows:cells,classification:{kind:'schedule',confidence:'high',reason:'test'}};
+  const evidence=extractSchedule({key:'A:12',part:'A',heading:'แผนงาน',sourceIndex:0,paragraphs:[],text:'',matchedBy:'label',blocks:[{type:'table',sourceIndex:1,rows,table:tableEvidence}],tables:[rows]});
+  assert.equal(evidence.status,'found');
+  assert.deepEqual(evidence.value[0].months,['1']);
+  assert.equal(evidence.value[0].responsible,'หัวหน้าโครงการ');
+});
+
+test('matrix schedule never treats an unknown checkbox glyph as selected',()=>{
+  const rows=[['กิจกรรมวิจัย','1','2'],['เก็บข้อมูล','','']];
+  const cells=rows.map(row=>({cells:row.map(text=>({text,columnSpan:1,verticalMerge:null,widthTwips:null,checkboxes:[],images:[]}))}));
+  cells[1].cells[1].checkboxes.push({state:'unknown',code:'F099',font:'Wingdings'});
+  const tableEvidence={rows,structuredRows:cells,classification:{kind:'schedule',confidence:'high',reason:'test'}};
+  const evidence=extractSchedule({key:'A:12',part:'A',heading:'แผนงาน',sourceIndex:0,paragraphs:[],text:'',matchedBy:'label',blocks:[{type:'table',sourceIndex:1,rows,table:tableEvidence}],tables:[rows]});
+  assert.equal(evidence.status,'review');
+  assert.deepEqual(evidence.value[0].months,[]);
+  assert.deepEqual(evidence.value[0].uncertainMonths,['1']);
+});
+
 test('budget extractor keeps rows and reports missing amounts without inventing them',()=>{
   const rows=[['หมวด','รายการ','จำนวน','บาท'],['ค่าใช้สอย','','',''],['','เดินทาง','2 x 500','1,000'],['','วัสดุ','1 ชุด','']];
   const evidence=extractBudget({key:'A:17',part:'A',heading:'งบประมาณ',sourceIndex:0,paragraphs:[],text:'',matchedBy:'label',blocks:[{type:'table',sourceIndex:1,rows}],tables:[rows]});
   assert.equal(evidence.value?.[0].amount,1000);
   assert.equal(evidence.value?.[1].amount,null);
+  assert.equal(evidence.status,'review');
+  assert.match(evidence.warnings[0],/1 รายการ/);
+});
+
+test('two-column budget uses the first cell as description and last cell as amount',()=>{
+  const rows=[['รายการค่าใช้จ่าย','จำนวนเงิน (บาท)'],['งบดำเนินงาน',''],['ค่าตอบแทนนักศึกษาช่วยงาน','5,700']];
+  const evidence=extractBudget({key:'A:17',part:'A',heading:'งบประมาณ',sourceIndex:0,paragraphs:[],text:'',matchedBy:'label',blocks:[{type:'table',sourceIndex:1,rows}],tables:[rows]});
+  assert.equal(evidence.status,'found');
+  assert.equal(evidence.value[0].description,'ค่าตอบแทนนักศึกษาช่วยงาน');
+  assert.equal(evidence.value[0].amount,5700);
 });
 
 test('English headings map to the same canonical keys',()=>{

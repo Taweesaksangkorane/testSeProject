@@ -1,0 +1,19 @@
+unit: convert-docx-pdf-api
+side_effects:
+  - source_loc: "app/api/convert-docx-pdf/route.ts:12"
+    effect: "Creates a per-request temporary directory, invokes the conversion script, reads the PDF, and removes the temporary directory."
+    must_preserve: true
+branches:
+  - source_loc: "app/api/convert-docx-pdf/route.ts:12"
+    condition: "Body is empty, oversized, or does not start with the DOCX ZIP signature."
+    behavior: "Return a 400 JSON error without invoking Word."
+    must_preserve: true
+error_paths:
+  - source_loc: "app/api/convert-docx-pdf/route.ts:12"
+    trigger: "Word COM/script conversion fails."
+    outcome: "Return a 500 JSON error and still clean the temporary directory."
+    contract: "HTTP 500 application/json {error:string}"
+    must_preserve: true
+concurrency:
+  model: async
+  tx_boundary: null

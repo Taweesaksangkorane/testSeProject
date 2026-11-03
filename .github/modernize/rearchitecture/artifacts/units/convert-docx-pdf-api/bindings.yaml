@@ -1,0 +1,15 @@
+unit: convert-docx-pdf-api
+bindings:
+  - type: route-declaration
+    name: "POST /api/convert-docx-pdf"
+    source_loc: "app/api/convert-docx-pdf/route.ts:12"
+    target: "POST"
+    must_appear_in_target: true
+    notes: "Next.js Node handler invokes a Windows PowerShell script."
+runtime_config:
+  - key: "Microsoft Word COM"
+    source_loc: "scripts/convert-docx-to-pdf.ps1:1"
+    source: code
+    default_value: "installed Microsoft Word on Windows"
+    must_appear_in_target: true
+    notes: "Current conversion cannot run on a standard Linux server."
