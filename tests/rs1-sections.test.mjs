@@ -56,3 +56,13 @@ test('Reports missing sections instead of claiming 100% extraction',()=>{
  assert.ok(result.warnings.some(x=>x.includes('ข้อ 19')));
  assert.equal(result.sections['A:7'].text,'ทดสอบ');
 });
+
+test('Routes renumbered template by meaning rather than original number',()=>{
+ const result=segmentRs1Sections({blocks:[
+  p('ส่วน ก : สาระสำคัญ'),p('21. การทบทวนวรรณกรรม'),p('ทบทวนเอกสารหลายฉบับ'),
+  p('22. วัตถุประสงค์ของโครงการวิจัย'),p('ศึกษาการใช้ระบบ')
+ ]});
+ assert.equal(result.sections['A:8'].text,'ทบทวนเอกสารหลายฉบับ');
+ assert.equal(result.sections['A:7'].text,'ศึกษาการใช้ระบบ');
+ assert.equal(result.sections['A:8'].matchedBy,'label');
+});
