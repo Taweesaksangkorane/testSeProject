@@ -1,0 +1,10 @@
+seams:
+  - id: "app/api/extract/route.ts:13"
+    description: "The modular extraction pipeline is added behind the existing upload endpoint and legacy UI mapping."
+    source: declared
+    cut_between:
+      migrated_side: extract-api
+      frozen_side: rs1-form-page
+    protocol_shift: null
+    frozen_side_rule: "The legacy top-level Extraction response consumed by app/page.tsx MUST NOT be removed or renamed during this phase."
+    bridge_points: []

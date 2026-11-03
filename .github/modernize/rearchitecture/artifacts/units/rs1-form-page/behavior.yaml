@@ -1,0 +1,22 @@
+unit: rs1-form-page
+side_effects:
+  - source_loc: "app/page.tsx:84"
+    effect: "Uploads a selected RS-1 file, maps the legacy extraction response into editable form state, and retains raw JSON for review."
+    must_preserve: true
+  - source_loc: "app/page.tsx:84"
+    effect: "Stores and restores a local browser draft; sends the same ProjectForm state to preview and export."
+    must_preserve: true
+branches:
+  - source_loc: "app/page.tsx:84"
+    condition: "Upload, parsing, preview, DOCX generation, or PDF conversion succeeds or fails."
+    behavior: "Shows progress or a user-visible error without silently discarding editable state."
+    must_preserve: true
+error_paths:
+  - source_loc: "app/page.tsx:84"
+    trigger: "An API returns a non-success response."
+    outcome: "Display the returned error and keep the user on the review workflow."
+    contract: "Visible browser error state"
+    must_preserve: true
+concurrency:
+  model: event-loop
+  tx_boundary: null
