@@ -1,7 +1,6 @@
 import {NextResponse} from 'next/server';
 import {readDocx, readLegacyDoc} from '../../../lib/docx';
-import {extractRs1} from '../../../lib/extract';
-import {segmentRs1Sections} from '../../../lib/rs1-sections';
+import {runRs1Pipeline} from '../../../lib/rs1-pipeline';
 
 export const runtime = 'nodejs';
 
@@ -24,9 +23,7 @@ export async function POST(request: Request) {
     if (!filename.endsWith('.docx') && !filename.endsWith('.doc')) return errorResponse('รองรับเฉพาะไฟล์ .doc และ .docx', 415);
     const document = filename.endsWith('.docx') ? await readDocx(data) : await readLegacyDoc(data);
 
-    const extraction = extractRs1(document);
-    const sectionMap = segmentRs1Sections(document);
-    return NextResponse.json({...extraction, sectionMap});
+    return NextResponse.json(runRs1Pipeline(document));
   } catch (error) {
     const message = error instanceof Error ? error.message : 'ไม่สามารถอ่านเอกสารได้';
     return errorResponse(message, 422);

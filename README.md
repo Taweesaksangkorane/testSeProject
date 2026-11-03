@@ -59,8 +59,33 @@ Open `http://localhost:3000`. Users can either complete the RS-1 form manually o
 
 - `lib/docx.ts` - DOCX XML reader
 - `lib/extract.ts` - RS-1 field extraction and validation
+- `lib/rs1-sections.ts` - multilingual semantic heading detection and ordered section routing
+- `lib/rs1-pipeline.ts` - canonical section evidence, schedule/budget extractors, and validation
 - `app/api/extract/route.ts` - DOCX upload API
 - `app/page.tsx` - manual entry, upload, review, and local draft interface
+
+### Modular extraction pipeline
+
+The upload API now runs `DOCX/DOC parser -> unified sourceDocument -> semantic section router -> independent section extractors -> canonical evidence -> validation`. The response remains backward compatible: existing `fields`, people, budget, warnings, and `sourceDocument` are still present. New consumers can use `sectionMap` and `canonical`; every canonical field reports status, confidence, source section/block indexes, extraction method, and warnings.
+
+Section routing uses Thai/English heading aliases and document structure rather than page numbers or fixed paragraph offsets. Schedule and budget tables are parsed independently, missing headings remain explicitly `missing`, and embedded DOCX images are retained as evidence instead of being silently discarded.
+
+Run verification with:
+
+```bash
+npm test
+npm run build
+```
+
+For a real file, start the app, upload the document, and select **ดูข้อมูล JSON** after import. Do not commit stakeholder documents or extracted personal data.
+
+### Deployment and remaining limits
+
+- Standard DOCX and text-only legacy DOC are supported without AI. PDF, scanned PDF, image OCR, and semantic AI fallback are not implemented.
+- Embedded image bytes stay inside the uploaded DOCX; JSON exposes safe relationship/path/type/size evidence. OCR/vision must be an optional, consented local provider before image text can be claimed.
+- Table cell merge metadata and tables continued across separate Word table elements still require a richer OOXML table model.
+- DOCX-to-PDF currently depends on Microsoft Word COM on Windows. A production host needs a separately validated conversion worker (for example, a Windows worker with Word licensing/operations controls or a LibreOffice-based worker with visual regression tests); identical pagination is not assumed.
+- Accuracy must be reported separately for section detection, field extraction, tables, and export fidelity. Synthetic tests are regression evidence, not a replacement for the stakeholder fixture evaluation.
 
 ## Key Links
 
