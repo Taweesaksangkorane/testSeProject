@@ -2,6 +2,7 @@ import {readFile} from 'node:fs/promises';
 import path from 'node:path';
 import JSZip from 'jszip';
 import {NextResponse} from 'next/server';
+import {wordParagraphs,type Rs1TextLayout} from '../../../lib/rs1-pdf-layout';
 
 export const runtime='nodejs';
 
@@ -21,16 +22,32 @@ const text=(value:unknown)=>typeof value==='string'?value.trim():'';
 const shown=(value:unknown)=>text(value)||'-';
 const joined=(record?:Record<string,string>)=>record?Object.values(record).map(text).filter(Boolean).join(', ')||'-':'-';
 function enteredText(value:string){
- const blocks=value.trim().replace(/\r\n?/g,'\n').split(/\n[ \t]*\n+/).map(block=>block.replace(/\n/g,' ').replace(/[ \t]{2,}/g,' ').trim()).filter(Boolean);
+ const blocks=value.trim().replace(/\r\n?/g,'\n').split(/\n[ \t]*\n+/).map(block=>{
+  const lines=block.split('\n').map(line=>line.replace(/[ \t]{2,}/g,' ').trim()).filter(Boolean);
+  return lines.reduce((result,line,index)=>{
+   if(index===0)return line;
+   const startsList=/^(?:\d+[.)]|[-•▪◦○o])\s+/u.test(line);
+   return `${result}${startsList?'\n':' '}${line}`;
+  },'');
+ }).filter(Boolean);
  let result='';
  blocks.forEach((block,index)=>{
-  if(index){const previous=blocks[index-1];const paragraphBreak=previous.length>120&&block.length>120;result+=paragraphBreak?'\n\n':'\n';}
+    if(index)result+='\n\n';
   result+=block;
  });
  return result.replace(/[ \t]+(?=(?:\(?\d{1,2}[.)]|[ก-ฮ][.)]|[-•▪◦○])\s+)/gu,'\n');
 }
 const referencesText=(value:string)=>enteredText(value).replace(/(?<=\.)\s+(?=[A-Z][A-Za-zÀ-ž]{2,}[A-Za-zÀ-ž&.,'’ -]{0,98}\(\d{4}\))/g,'\u2028');
 const textXml=(value:string)=>escapeXml(enteredText(value)).replace(/[\n\u2028]/g,'</w:t><w:br/><w:t xml:space="preserve">');
+const enteredRun='<w:r><w:rPr><w:rFonts w:ascii="TH Sarabun New" w:eastAsia="TH Sarabun New" w:hAnsi="TH Sarabun New" w:cs="TH Sarabun New"/><w:color w:val="000000"/><w:sz w:val="28"/><w:szCs w:val="28"/></w:rPr>';
+function paragraphPropertyXml(paragraph:string){
+ const property=paragraph.match(/<w:pPr(?:\s[^>]*)?>[\s\S]*?<\/w:pPr>/)?.[0];
+ return property??'<w:pPr><w:jc w:val="left"/><w:spacing w:after="0" w:line="240" w:lineRule="auto"/></w:pPr>';
+}
+function enteredParagraphs(value:string,property:string){
+ const blocks=enteredText(value).split(/\n{2,}/).filter(Boolean);
+ return blocks.map(block=>`<w:p>${property}${enteredRun}<w:t xml:space="preserve">${textXml(block)}</w:t></w:r></w:p>`).join('');
+}
 const thaiMonths=['มกราคม','กุมภาพันธ์','มีนาคม','เมษายน','พฤษภาคม','มิถุนายน','กรกฎาคม','สิงหาคม','กันยายน','ตุลาคม','พฤศจิกายน','ธันวาคม'];
 function thaiDate(value:unknown){
  const raw=text(value);if(!raw)return '';
@@ -51,27 +68,49 @@ function blackRun(run:string){
  if(/<w:rPr(?:\s[^>]*)?>/.test(withoutInheritedStyle))return withoutInheritedStyle.replace(/<w:rPr(?:\s[^>]*)?>/,match=>`${match}${enteredStyle}`);
  return withoutInheritedStyle.replace(/<w:r(?:\s[^>]*)?>/,match=>`${match}<w:rPr>${enteredStyle}</w:rPr>`);
 }
-function replaceParagraph(paragraph:string,value:string){
- const safe=textXml(value);
- if(/<w:r(?:\s[^>]*)?>[\s\S]*?<\/w:r>/.test(paragraph)){
-  let first=true;
-  return leftAlignedParagraph(paragraph.replace(/<w:r(?:\s[^>]*)?>[\s\S]*?<\/w:r>/g,run=>{if(!/<w:t(?:\s[^>]*)?>[\s\S]*?<\/w:t>/.test(run))return run;if(!first)return run.replace(/<w:t(?:\s[^>]*)?>[\s\S]*?<\/w:t>/g,'<w:t></w:t>');first=false;return blackRun(run.replace(/<w:t(?:\s[^>]*)?>[\s\S]*?<\/w:t>/g,`<w:t xml:space="preserve">${safe}</w:t>`))}));
- }
- const end=paragraph.lastIndexOf('</w:p>');
- return leftAlignedParagraph(`${paragraph.slice(0,end)}<w:r><w:rPr><w:rFonts w:ascii="TH Sarabun New" w:eastAsia="TH Sarabun New" w:hAnsi="TH Sarabun New" w:cs="TH Sarabun New"/><w:color w:val="000000"/><w:sz w:val="28"/><w:szCs w:val="28"/></w:rPr><w:t xml:space="preserve">${safe}</w:t></w:r>${paragraph.slice(end)}`);
+function replaceParagraph(paragraph:string,value:string,layout?:Rs1TextLayout){
+ if(layout)return wordParagraphs(value,layout);
+ return enteredParagraphs(value,paragraphPropertyXml(leftAlignedParagraph(paragraph)));
 }
-function appendParagraph(paragraph:string,value:string,separate=false){
+function appendParagraph(paragraph:string,value:string,separate=false,layout?:Rs1TextLayout){
  if(!value)return paragraph;
- const safe=textXml(value);
- if(separate)return `${paragraph}<w:p><w:pPr><w:spacing w:after="0" w:line="240" w:lineRule="auto"/><w:jc w:val="left"/></w:pPr><w:r><w:rPr><w:rFonts w:ascii="TH Sarabun New" w:eastAsia="TH Sarabun New" w:hAnsi="TH Sarabun New" w:cs="TH Sarabun New"/><w:color w:val="000000"/><w:sz w:val="28"/><w:szCs w:val="28"/></w:rPr><w:t xml:space="preserve">${safe}</w:t></w:r></w:p>`;
- const end=paragraph.lastIndexOf('</w:p>');return leftAlignedParagraph(`${paragraph.slice(0,end)}<w:r><w:rPr><w:rFonts w:ascii="TH Sarabun New" w:eastAsia="TH Sarabun New" w:hAnsi="TH Sarabun New" w:cs="TH Sarabun New"/><w:color w:val="000000"/><w:sz w:val="28"/><w:szCs w:val="28"/></w:rPr><w:t xml:space="preserve"> ${safe}</w:t></w:r>${paragraph.slice(end)}`);
+ if(layout)return wordParagraphs(value,layout);
+ const property=paragraphPropertyXml(leftAlignedParagraph(paragraph));
+ if(separate)return `${paragraph}${enteredParagraphs(value,property)}`;
+ const blocks=enteredText(value).split(/\n{2,}/).filter(Boolean);
+ const first=blocks.shift()??'';
+ const end=paragraph.lastIndexOf('</w:p>');
+ const appended=`<w:r><w:rPr><w:rFonts w:ascii="TH Sarabun New" w:eastAsia="TH Sarabun New" w:hAnsi="TH Sarabun New" w:cs="TH Sarabun New"/><w:color w:val="000000"/><w:sz w:val="28"/><w:szCs w:val="28"/></w:rPr><w:t xml:space="preserve"> ${textXml(first)}</w:t></w:r>`;
+ return leftAlignedParagraph(`${paragraph.slice(0,end)}${appended}${paragraph.slice(end)}${blocks.map(block=>enteredParagraphs(block,property)).join('')}`);
 }
+const biographyHeadings:Record<number,string>={
+  188:'ชื่อ-สกุล (ภาษาไทย/ภาษาอังกฤษ)',
+  189:'ตำแหน่งทางวิชาการ',
+  190:'รหัสประจำตัวนักวิจัยแห่งชาติ (ถ้ามี)',
+  191:'ประวัติการศึกษา',
+  192:'ประวัติการทำงาน',
+  193:'สาขาวิชาการที่มีความชำนาญพิเศษ',
+  194:'ประวัติการเผยแพร่ผลงานวิจัย',
+  195:'ประวัติการนำเสนอผลงานวิจัย',
+  196:'ผลงานวิจัยด้านทรัพย์สินทางปัญญา',
+  197:'ประสบการณ์ที่เกี่ยวข้องกับการบริหารงานวิจัย',
+  198:'งานวิจัยที่ทำเสร็จแล้ว',
+  199:'งานวิจัยที่กำลังทำ'
+};
 function fillParagraphs(xml:string,values:Map<number,string>,appends:Map<number,string>,checks:Map<number,boolean>){
+ const layouts=new Map<number,Rs1TextLayout>([
+  [37,'body'],[39,'objectives'],[41,'body'],[43,'references'],[45,'body'],[47,'body'],[65,'body'],[72,'body'],[78,'body'],[162,'body'],
+ ]);
  let index=0;
  return xml.replace(/<w:p(?:\s[^>]*)?>[\s\S]*?<\/w:p>/g,paragraph=>{
   let result=paragraph;
-  if(values.has(index))result=replaceParagraph(result,values.get(index)??'');
-  if(appends.has(index))result=appendParagraph(result,appends.get(index)??'',[29,31,35,45,47].includes(index));
+  if(values.has(index))result=replaceParagraph(result,values.get(index)??'',layouts.get(index));
+  if(appends.has(index)){
+   const heading=biographyHeadings[index];
+   result=heading
+    ? replaceParagraph(result,`${heading} ${appends.get(index)??''}`)
+    : appendParagraph(result,appends.get(index)??'',[29,31,35,45,47].includes(index),layouts.get(index));
+  }
   if(checks.has(index))result=result.replace(/(<w:sym\b[^>]*w:char=")[A-Fa-f0-9]+("[^>]*\/?>)/g,`$1${checks.get(index)?'F0FE':'F0A8'}$2`);
   index++;
   return result;
@@ -125,6 +164,18 @@ function improvePageFlow(xml:string){
   return result;
  });
 }
+function normalizeBiographyHeading(xml:string){
+ return xml.replace(/<w:p(?:\s[^>]*)?>[\s\S]*?<\/w:p>/g,paragraph=>{
+  const plain=[...paragraph.matchAll(/<w:t(?:\s[^>]*)?>([\s\S]*?)<\/w:t>/g)].map(match=>match[1]).join('');
+  if(!plain.includes('ส่วน ข : ประวัติคณะผู้วิจัย'))return paragraph;
+  let replaced=false;
+  return paragraph.replace(/<w:t(?:\s[^>]*)?>[\s\S]*?<\/w:t>/g,tag=>{
+   if(replaced)return tag.replace(/(<w:t(?:\s[^>]*)?>)[\s\S]*?(<\/w:t>)/,'$1$2');
+   replaced=true;
+   return tag.replace(/(<w:t(?:\s[^>]*)?>)[\s\S]*?(<\/w:t>)/,'$1ประวัติผู้วิจัย$2');
+  });
+ });
+}
 function normalizeBodyTypography(xml:string){
  return xml.replace(/<w:sz w:val="32"\s*\/>/g,'<w:sz w:val="28"/>').replace(/<w:szCs w:val="32"\s*\/>/g,'<w:szCs w:val="28"/>');
 }
@@ -167,7 +218,7 @@ export async function POST(request:Request){
   const document=zip.file('word/document.xml');if(!document)throw new Error('ไม่พบโครงสร้างเอกสาร Word');
   const xml=await document.async('string');const {values,appends,checks}=fields(form);
   const filled=removeUnusedBudgetRows(insertAdditionalCoResearchers(fillParagraphs(xml,values,appends,checks),form.coResearchers??[]));
-  zip.file('word/document.xml',normalizeBodyTypography(stripRedGuidance(improvePageFlow(filled))));
+  zip.file('word/document.xml',normalizeBodyTypography(stripRedGuidance(normalizeBiographyHeading(improvePageFlow(filled)))));
   const output=await zip.generateAsync({type:'uint8array',compression:'DEFLATE'});
   const body=output.buffer.slice(output.byteOffset,output.byteOffset+output.byteLength) as ArrayBuffer;
   return new NextResponse(body,{headers:{'Content-Type':'application/vnd.openxmlformats-officedocument.wordprocessingml.document','Content-Disposition':"attachment; filename*=UTF-8''RS-1-filled.docx",'Cache-Control':'no-store'}});
