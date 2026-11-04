@@ -12,5 +12,6 @@ test('preserves an embedded image as source evidence even when it has no readabl
   const doc=await readDocx(await zip.generateAsync({type:'nodebuffer'}));
   assert.equal(doc.sourceDocument.stats.images,1);
   assert.equal(doc.sourceDocument.images?.[0].path,'word/media/framework.png');
+  assert.equal(doc.sourceDocument.images?.[0].dataBase64,Buffer.from([137,80,78,71]).toString('base64'));
   assert.equal(doc.sourceDocument.blocks[0].images?.[0].relationshipId,'rId7');
 });

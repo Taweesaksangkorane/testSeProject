@@ -2,6 +2,7 @@ import type {DocContent,ImageEvidence,TableKind} from './docx';
 import type {Extraction,Field} from './extract';
 import {extractRs1} from './extract.ts';
 import {segmentRs1Sections,type Rs1RoutedSection,type Rs1SectionMap,type Rs1RoutedBlock} from './rs1-sections.ts';
+import {interpretBudget,interpretSchedule} from './rs1-table-parser.ts';
 
 export type Confidence='high'|'medium'|'low';
 export type CanonicalStatus='found'|'missing'|'review';
@@ -9,7 +10,8 @@ export type FieldEvidence<T>={value:T|null;status:CanonicalStatus;confidence:Con
 export type ScheduleActivity={activity:string;period:string|null;months:string[];uncertainMonths:string[];responsible:string|null;sourceRow:number};
 export type BudgetLine={category:string;description:string;quantity:string;amount:number|null;sourceRow:number};
 export type ValidationIssue={code:string;severity:'warning'|'error';field:string;message:string};
-export type CanonicalRs1={project:{titleTH:FieldEvidence<string>;titleEN:FieldEvidence<string>;strategy:FieldEvidence<string>};sections:Record<string,FieldEvidence<string>|FieldEvidence<ScheduleActivity[]>|FieldEvidence<BudgetLine[]>>;biographies:Extraction['biographies'];reviewers:Extraction['experts'];images:ImageEvidence[];validation:ValidationIssue[];warnings:string[]};
+export type SectionImageEvidence={sectionKey:string;sourceBlock:number;image:ImageEvidence};
+export type CanonicalRs1={project:{titleTH:FieldEvidence<string>;titleEN:FieldEvidence<string>;strategy:FieldEvidence<string>};sections:Record<string,FieldEvidence<string>|FieldEvidence<ScheduleActivity[]>|FieldEvidence<BudgetLine[]>>;biographies:Extraction['biographies'];reviewers:Extraction['experts'];images:ImageEvidence[];sectionImages:SectionImageEvidence[];validation:ValidationIssue[];warnings:string[]};
 export type Rs1PipelineResult=Extraction&{sectionMap:Rs1SectionMap;canonical:CanonicalRs1};
 
 const blockIndexes=(section:Rs1RoutedSection)=>section.blocks.map(block=>block.sourceIndex);
@@ -27,6 +29,12 @@ function isMark(value:string):boolean{return /[✓✔☑☒xX\/●■]/u.test(va
 type RoutedTable=Extract<Rs1RoutedBlock,{type:'table'}>;
 
 export function extractSchedule(section:Rs1RoutedSection|undefined):FieldEvidence<ScheduleActivity[]>{
+ const interpreted=(section?.blocks.filter((block):block is RoutedTable=>block.type==='table')??[]).map(block=>interpretSchedule({rows:block.rows,structuredRows:block.table?.structuredRows}));
+ if(interpreted.some(result=>result.items.length)){
+  const activities=interpreted.flatMap(result=>result.items);const warnings=interpreted.flatMap(result=>result.warnings);
+  const review=warnings.length>0||activities.some(item=>item.uncertainMonths.length>0);
+  return {value:activities,status:review?'review':'found',confidence:review?'medium':'high',sourceSection:'A:12',sourceBlocks:section?blockIndexes(section):[],extractionMethod:'section-table',warnings:[...new Set(warnings)]};
+ }
  const activities:ScheduleActivity[]=[];
  const tableBlocks=section?.blocks.filter((block):block is RoutedTable=>block.type==='table')??[];
  for(const block of tableBlocks){
@@ -62,6 +70,13 @@ export function extractSchedule(section:Rs1RoutedSection|undefined):FieldEvidenc
 }
 
 export function extractBudget(section:Rs1RoutedSection|undefined):FieldEvidence<BudgetLine[]>{
+ const interpreted=(section?.blocks.filter((block):block is RoutedTable=>block.type==='table')??[]).map(block=>interpretBudget({rows:block.rows,structuredRows:block.table?.structuredRows}));
+ if(interpreted.some(result=>result.items.length)){
+  const lines=interpreted.flatMap(result=>result.items);const warnings=interpreted.flatMap(result=>result.warnings);
+  const missingAmounts=lines.filter(line=>line.amount===null).length;
+  if(missingAmounts)warnings.unshift(`รายการงบประมาณ ${missingAmounts} รายการยังไม่มีจำนวนเงิน`);
+  return {value:lines,status:warnings.length?'review':'found',confidence:warnings.length?'medium':'high',sourceSection:'A:17',sourceBlocks:section?blockIndexes(section):[],extractionMethod:'section-table',warnings:[...new Set(warnings)]};
+ }
  const rows=section?.tables.flatMap(table=>table)??[];const lines:BudgetLine[]=[];let category='';
  rows.forEach((row,index)=>{
   const cells=row.map(cell=>cell.trim());const amount=[...cells].reverse().map(parseAmount).find(value=>value!==null)??null;const nonEmpty=cells.filter(Boolean);
@@ -102,6 +117,7 @@ export function runRs1Pipeline(doc:DocContent):Rs1PipelineResult{
  sections['A:17']=extractBudget(sectionMap.sections['A:17']??fallbackTableSection(doc,'budget','A:17'));
  const project={titleTH:fromLegacy(extraction.fields.projectTitleTH,'intro:title'),titleEN:fromLegacy(extraction.fields.projectTitleEN,'intro:title'),strategy:fromLegacy(extraction.fields.strategy,'intro:strategy')};
  const validation=validate(extraction,sections['A:17'] as FieldEvidence<BudgetLine[]>);const warnings=[...new Set([...extraction.warnings,...sectionMap.warnings,...validation.map(issue=>issue.message)])];
- const canonical:CanonicalRs1={project,sections,biographies:extraction.biographies,reviewers:extraction.experts,images:doc.sourceDocument.images??[],validation,warnings};
+ const sectionImages=Object.entries(sectionMap.sections).flatMap(([sectionKey,section])=>section.blocks.flatMap(block=>(block.images??[]).map(image=>({sectionKey,sourceBlock:block.sourceIndex,image}))));
+ const canonical:CanonicalRs1={project,sections,biographies:extraction.biographies,reviewers:extraction.experts,images:doc.sourceDocument.images??[],sectionImages,validation,warnings};
  return {...extraction,warnings,sectionMap,canonical};
 }

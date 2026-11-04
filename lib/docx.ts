@@ -10,9 +10,9 @@ export type SourceTableCell={
 };
 export type SourceTableRow={cells:SourceTableCell[]};
 export type SourceTable={rows:string[][];structuredRows:SourceTableRow[];classification:TableClassification};
-export type DocBlock = { type: 'paragraph'; text: string } | {type:'table'; rows: string[][];table?:SourceTable};
+export type DocBlock = { type: 'paragraph'; text: string;images?:ImageEvidence[];checkboxes?:CheckboxMark[] } | {type:'table'; rows: string[][];table?:SourceTable;images?:ImageEvidence[];checkboxes?:CheckboxMark[]};
 export type CheckboxMark = {state:'checked'|'unchecked'|'unknown'; code:string; font:string};
-export type ImageEvidence = {id:string;relationshipId:string;path:string;contentType:string;size:number};
+export type ImageEvidence = {id:string;relationshipId:string;path:string;contentType:string;size:number;dataBase64?:string};
 export type ParagraphInfo = {text:string; checkboxes:CheckboxMark[];images:ImageEvidence[]};
 export type SourceDocumentBlock =
  | {id:string;index:number;type:'paragraph';text:string;checkboxes:CheckboxMark[];images?:ImageEvidence[]}
@@ -209,14 +209,14 @@ export async function readDocx(data: Buffer):Promise<DocContent> {
     if(!file)continue;
     const bytes=await file.async('uint8array');
     const extension=normalized.split('.').pop()?.toLowerCase()??'';
-    imageByRelationship.set(relationshipId,{id:`image-${imageByRelationship.size+1}`,relationshipId,path:normalized,contentType:contentTypeByExtension.get(extension)??`image/${extension||'unknown'}`,size:bytes.byteLength});
+    imageByRelationship.set(relationshipId,{id:`image-${imageByRelationship.size+1}`,relationshipId,path:normalized,contentType:contentTypeByExtension.get(extension)??`image/${extension||'unknown'}`,size:bytes.byteLength,dataBase64:Buffer.from(bytes).toString('base64')});
   }
   const blocks:DocBlock[]=[];
   const blockCheckboxes:CheckboxMark[][]=[];
   const blockImages:ImageEvidence[][]=[];
   const paragraphDetails:ParagraphInfo[]=[];
   for(const n of body){
-    if(n['w:p']) {const info=paraInfo(n['w:p'],imageByRelationship);if(info.text||info.images.length) {blocks.push({type:'paragraph',text:info.text});blockCheckboxes.push(info.checkboxes);blockImages.push(info.images);paragraphDetails.push(info);}}
+    if(n['w:p']) {const info=paraInfo(n['w:p'],imageByRelationship);if(info.text||info.images.length) {blocks.push({type:'paragraph',text:info.text,images:info.images,checkboxes:info.checkboxes});blockCheckboxes.push(info.checkboxes);blockImages.push(info.images);paragraphDetails.push(info);}}
     if(n['w:tbl']) {
       const tableEvidence=table(n['w:tbl'],imageByRelationship);
       const rows=tableEvidence.rows;
@@ -225,7 +225,7 @@ export async function readDocx(data: Buffer):Promise<DocContent> {
         const info=paraInfo(p,imageByRelationship);
         if(info.text||info.images.length){paragraphDetails.push(info);tableMarks.push(...info.checkboxes);}
       }
-      if(rows.length){blocks.push({type:'table',rows,table:tableEvidence});blockCheckboxes.push(tableMarks);blockImages.push(collectParagraphNodes(n['w:tbl']).flatMap(p=>paraInfo(p,imageByRelationship).images));}
+      if(rows.length){const images=collectParagraphNodes(n['w:tbl']).flatMap(p=>paraInfo(p,imageByRelationship).images);blocks.push({type:'table',rows,table:tableEvidence,images,checkboxes:tableMarks});blockCheckboxes.push(tableMarks);blockImages.push(images);}
     }
   }
   const paragraphs=paragraphDetails.map(x=>x.text);

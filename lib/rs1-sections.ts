@@ -3,15 +3,15 @@ import type {DocContent,SourceTable} from './docx';
 /**
  * Route RS-1 by semantic section headers, not page/paragraph offsets.
  * Preserves the original paragraph + table order for later field-specific parsing.
- * Pictures and scanned pages require a separate OCR/vision step.
+ * Images are retained as evidence only. This parser never infers their content.
  */
 export type Rs1RoutedBlock =
-  | {type:'paragraph'; sourceIndex:number; text:string}
-  | {type:'table'; sourceIndex:number; rows:string[][];table?:SourceTable};
+  | {type:'paragraph'; sourceIndex:number; text:string;images?:DocContent['sourceDocument']['images']}
+  | {type:'table'; sourceIndex:number; rows:string[][];table?:SourceTable;images?:DocContent['sourceDocument']['images']};
 export type Rs1RoutedSection = {
   key:string; part:'intro'|'A'|'B'|'C'; heading:string; sourceIndex:number;
   paragraphs:string[]; tables:string[][][]; blocks:Rs1RoutedBlock[];
-  text:string; matchedBy:'number-and-label'|'label';
+  text:string; matchedBy:'number-and-label'|'label'|'fuzzy-label';
 };
 export type Rs1SectionMap = {
   sections:Record<string,Rs1RoutedSection>;
@@ -21,6 +21,20 @@ export type Rs1SectionMap = {
 };
 type Part='intro'|'A'|'B'|'C';
 type Spec={key:string;part:Part;number:number;names:RegExp[]};
+export type HeadingDetectionOptions={aliases?:Record<string,string[]>;fuzzyThreshold?:number};
+export const DEFAULT_HEADING_ALIASES:Record<string,string[]>={
+ 'intro:title':['ชื่อโครงการวิจัย','project title'],
+ 'A:1':['คณะผู้วิจัย','researchers'], 'A:2':['ที่ปรึกษาโครงการวิจัย','project advisor'],
+ 'A:3':['ความร่วมมือด้านการวิจัยกับหน่วยงานภายนอก','research collaboration'],
+ 'A:4':['ประเภทของการวิจัย','type of research'], 'A:5':['คำสำคัญ','keywords'],
+ 'A:6':['ความสำคัญและที่มาของปัญหา','background of the research'], 'A:7':['วัตถุประสงค์ของโครงการวิจัย','objectives of the research'],
+ 'A:8':['การทบทวนวรรณกรรม','literature review'], 'A:9':['เอกสารอ้างอิง','references'],
+ 'A:10':['กระบวนการและวิธีการดำเนินการ','methodology'], 'A:11':['ขอบเขตของโครงการวิจัย','scope of the research'],
+ 'A:12':['แผนการดำเนินงานตลอดโครงการวิจัย','research work plan'],
+ 'A:13':['ผลงานตามระยะเวลาการรายงานความก้าวหน้า','research progress report'], 'A:14':['ผลลัพธ์ที่คาดว่าจะได้รับ','expected outcomes'],
+ 'A:15':['การบูรณาการงานวิจัย','integration of research'], 'A:16':['ระดับการถ่ายทอดสู่สังคม','social dissemination'],
+ 'A:17':['รายละเอียดงบประมาณการวิจัย','research budget'], 'A:18':['มาตรฐานการวิจัย','research standards'], 'A:19':['คำชี้แจงอื่น','other clarifications']
+};
 const A:[number,RegExp[]][]=[
  [1,[/^คณะผู้วิจัย/u,/^(?:the )?researchers?\b/i]],
  [2,[/^ที่ปรึกษาโครงการวิจัย/u,/^project advisor/i]],
@@ -61,6 +75,13 @@ const specs:Spec[]=[
  ...B.map(([number,names])=>({key:'B:'+number,part:'B' as Part,number,names}))
 ];
 function clean(s:string){return s.normalize('NFC').replace(/\u00a0/g,' ').replace(/[ \t]+/g,' ').trim();}
+function fuzzyText(s:string){return clean(s).toLocaleLowerCase('en-US').replace(/[^\p{L}\p{N}]+/gu,'');}
+function editDistance(a:string,b:string){
+ const previous=Array.from({length:b.length+1},(_,i)=>i);
+ for(let i=1;i<=a.length;i++){let diagonal=previous[0];previous[0]=i;for(let j=1;j<=b.length;j++){const old=previous[j];previous[j]=Math.min(previous[j]+1,previous[j-1]+1,diagonal+(a[i-1]===b[j-1]?0:1));diagonal=old;}}
+ return previous[b.length];
+}
+function similarity(a:string,b:string){const x=fuzzyText(a),y=fuzzyText(b);return x&&y?1-editDistance(x,y)/Math.max(x.length,y.length):0;}
 function getNumber(s:string){
  const m=s.match(/^(?:ข้อ\s*)?(\d{1,2})(?:\s*[.)．:：]\s*|\s+)(?!\d)([\s\S]*)$/u);
  return m?{n:Number(m[1]),rest:m[2].trim()}:{n:null,rest:s};
@@ -71,7 +92,7 @@ function detectPart(s:string):Part|null{
  if(/^(?:ส่วน\s*ค\s*[:：-]?\s*เสนอชื่อ|part\s*c\s*[:：-]?\s*list of reviewers)/iu.test(s))return 'C';
  return null;
 }
-function detectHeading(s:string,part:Part){
+function detectHeading(s:string,part:Part,options:HeadingDetectionOptions={}){
  const {n,rest}=getNumber(s);
  for(const spec of specs){
   if(spec.part!==part)continue;
@@ -88,6 +109,17 @@ function detectHeading(s:string,part:Part){
    return {spec,suffix,matchedBy:n===spec.number?'number-and-label' as const:'label' as const};
   }
  }
+ const threshold=options.fuzzyThreshold??0.84;
+ if(rest.length<=120){
+  const candidates=specs.filter(spec=>spec.part===part && (n===null||n===spec.number));
+  let best:{spec:Spec;alias:string;score:number}|null=null;
+  for(const spec of candidates)for(const alias of options.aliases?.[spec.key]??DEFAULT_HEADING_ALIASES[spec.key]??[]){
+   const candidate=rest.slice(0,alias.length+Math.max(3,Math.ceil(alias.length*0.15)));
+   const score=Math.max(similarity(candidate,alias),similarity(rest,alias));
+   if(!best||score>best.score)best={spec,alias,score};
+  }
+  if(best&&best.score>=threshold)return {spec:best.spec,suffix:'',matchedBy:'fuzzy-label' as const};
+ }
  return null;
 }
 function append(section:Rs1RoutedSection,block:Rs1RoutedBlock){
@@ -99,21 +131,21 @@ function append(section:Rs1RoutedSection,block:Rs1RoutedBlock){
 function create(key:string,part:Part,heading:string,index:number,matchedBy:Rs1RoutedSection['matchedBy']):Rs1RoutedSection{
  return {key,part,heading,sourceIndex:index,paragraphs:[],tables:[],blocks:[],text:'',matchedBy};
 }
-export function segmentRs1Sections(doc:Pick<DocContent,'blocks'>):Rs1SectionMap{
+export function segmentRs1Sections(doc:Pick<DocContent,'blocks'>,options:HeadingDetectionOptions={}):Rs1SectionMap{
  const result:Rs1SectionMap={sections:{},occurrences:{},order:[],warnings:[]};
  let part:Part='intro',current:Rs1RoutedSection|null=null,hasPartMarker=false;
  doc.blocks.forEach((block,index)=>{
   if(block.type==='table'){
-   if(current)append(current,{type:'table',sourceIndex:index,rows:block.rows,table:block.table});
+   if(current)append(current,{type:'table',sourceIndex:index,rows:block.rows,table:block.table,images:block.images});
    return;
   }
   const paragraph=clean(block.text);
   if(!paragraph)return;
   const nextPart=detectPart(paragraph);
   if(nextPart){part=nextPart;current=null;hasPartMarker=true;return;}
-  let match=detectHeading(paragraph,part);
+  let match=detectHeading(paragraph,part,options);
   if(!match&&part==='intro'&&!hasPartMarker){
-   const fallback=detectHeading(paragraph,'A');
+   const fallback=detectHeading(paragraph,'A',options);
    if(fallback){part='A';match=fallback;}
   }
   if(match){
@@ -139,7 +171,7 @@ export function segmentRs1Sections(doc:Pick<DocContent,'blocks'>):Rs1SectionMap{
    current=create('C:reviewers','C','ส่วน ค / Part C',index,'label');
    result.sections[current.key]=current;result.occurrences[current.key]=[current];result.order.push(current.key);
   }
-  if(current)append(current,{type:'paragraph',sourceIndex:index,text:paragraph});
+  if(current)append(current,{type:'paragraph',sourceIndex:index,text:paragraph,images:block.images});
  });
  for(let i=1;i<=19;i++)if(!result.sections['A:'+i])result.warnings.push('ไม่พบส่วน ก ข้อ '+i);
  return result;

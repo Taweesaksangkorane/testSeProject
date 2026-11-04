@@ -88,3 +88,15 @@ test('Keeps repeated biography headings as separate occurrences',()=>{
  assert.equal(result.occurrences['B:4'][0].text,'ปริญญาเอก');
  assert.equal(result.occurrences['B:4'][1].text,'ปริญญาโท');
 });
+
+test('deterministic fuzzy matching tolerates a small heading typo',()=>{
+ const result=segmentRs1Sections({blocks:['ส่วน ก สาระสำคัญ','12. แผนการดำเนินงนตลอดโครงการวิจัย','กิจกรรมสังเคราะห์ข้อมูล'].map(p)});
+ assert.equal(result.sections['A:12'].matchedBy,'fuzzy-label');
+ assert.match(result.sections['A:12'].text,/สังเคราะห์ข้อมูล/u);
+});
+
+test('custom heading aliases remain local and configurable',()=>{
+ const result=segmentRs1Sections({blocks:['ส่วน ก สาระสำคัญ','12. ตารางเวลาของงาน','กิจกรรมทดสอบ'].map(p)},{aliases:{'A:12':['ตารางเวลาของงาน']}});
+ assert.equal(result.sections['A:12'].matchedBy,'fuzzy-label');
+ assert.match(result.sections['A:12'].text,/กิจกรรมทดสอบ/u);
+});
