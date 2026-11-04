@@ -38,6 +38,12 @@ test('supports labelled advisor data across lines',()=>{
  });
 });
 
+test('keeps an unlabelled advisor name and separates contact details from affiliation',()=>{
+ assert.deepEqual(parseAdvisor('อ.ดร. กมล พิมา\nตำแหน่งทางวิชาการ: อ.ดร\nสังกัด: สำนักวิชาวิทยาศาสตร์\nอีเมล: advisor@example.ac.th'),{
+  name:'อ.ดร. กมล พิมา',qualification:'',academicPosition:'อ.ดร',affiliation:'สำนักวิชาวิทยาศาสตร์',email:'advisor@example.ac.th'
+ });
+});
+
 test('splits an unlabeled collaboration sentence from RS-1 data6',()=>{
  const value='อ. ดร. ศุภชัย อินทรกำแหง — ศูนย์พัฒนาการเรียนรู้ภาษา สถาบันการศึกษาเครือข่าย จังหวัดเชียงราย 57000; ร่วมให้ข้อคิดเห็นต่อชุดคำศัพท์และแนวทางนำผลการศึกษาไปประยุกต์ใช้ในการจัดกิจกรรมการเรียนการสอน (ไม่เข้าถึงข้อมูลระบุตัวตนของผู้เข้าร่วม)';
  assert.deepEqual(parseCollaboration(value),{

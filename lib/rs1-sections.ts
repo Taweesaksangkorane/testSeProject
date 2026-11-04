@@ -23,17 +23,36 @@ type Part='intro'|'A'|'B'|'C';
 type Spec={key:string;part:Part;number:number;names:RegExp[]};
 export type HeadingDetectionOptions={aliases?:Record<string,string[]>;fuzzyThreshold?:number};
 export const DEFAULT_HEADING_ALIASES:Record<string,string[]>={
- 'intro:title':['ชื่อโครงการวิจัย','project title'],
- 'A:1':['คณะผู้วิจัย','researchers'], 'A:2':['ที่ปรึกษาโครงการวิจัย','project advisor'],
- 'A:3':['ความร่วมมือด้านการวิจัยกับหน่วยงานภายนอก','research collaboration'],
- 'A:4':['ประเภทของการวิจัย','type of research'], 'A:5':['คำสำคัญ','keywords'],
- 'A:6':['ความสำคัญและที่มาของปัญหา','background of the research'], 'A:7':['วัตถุประสงค์ของโครงการวิจัย','objectives of the research'],
- 'A:8':['การทบทวนวรรณกรรม','literature review'], 'A:9':['เอกสารอ้างอิง','references'],
- 'A:10':['กระบวนการและวิธีการดำเนินการ','methodology'], 'A:11':['ขอบเขตของโครงการวิจัย','scope of the research'],
- 'A:12':['แผนการดำเนินงานตลอดโครงการวิจัย','research work plan'],
- 'A:13':['ผลงานตามระยะเวลาการรายงานความก้าวหน้า','research progress report'], 'A:14':['ผลลัพธ์ที่คาดว่าจะได้รับ','expected outcomes'],
- 'A:15':['การบูรณาการงานวิจัย','integration of research'], 'A:16':['ระดับการถ่ายทอดสู่สังคม','social dissemination'],
- 'A:17':['รายละเอียดงบประมาณการวิจัย','research budget'], 'A:18':['มาตรฐานการวิจัย','research standards'], 'A:19':['คำชี้แจงอื่น','other clarifications']
+ 'intro:title':['ชื่อโครงการวิจัย','ชื่อโครงการ','ชื่อเรื่องโครงการวิจัย','ชื่อเรื่องงานวิจัย','research project title','project title','research title'],
+ 'intro:strategy':['ความสอดคล้องกับประเด็นยุทธศาสตร์','ความสอดคล้องกับยุทธศาสตร์การวิจัย','ประเด็นยุทธศาสตร์การวิจัย','research strategy alignment','strategic alignment'],
+ 'A:1':['คณะผู้วิจัย','ทีมนักวิจัย','รายชื่อคณะผู้วิจัย','ผู้วิจัยและผู้ร่วมโครงการ','research team','researchers','investigators'],
+ 'A:2':['ที่ปรึกษาโครงการวิจัย','ที่ปรึกษางานวิจัย','อาจารย์ที่ปรึกษาโครงการ','project advisor','research advisor','project consultant'],
+ 'A:3':['ความร่วมมือด้านการวิจัยกับหน่วยงานภายนอก','ความร่วมมือกับหน่วยงานภายนอก','หน่วยงานร่วมวิจัย','เครือข่ายความร่วมมือวิจัย','external research collaboration','research collaboration','collaborating organization'],
+ 'A:4':['ประเภทของการวิจัย','ประเภทงานวิจัย','รูปแบบการวิจัย','ชนิดของการวิจัย','type of research','research type','study type'],
+ 'A:5':['คำสำคัญ','คำสำคัญของโครงการ','คำหลัก','คำค้น','keywords','key words','research keywords'],
+ 'A:6':['ความสำคัญและที่มาของปัญหา','ความสำคัญที่มาของปัญหา','หลักการและเหตุผล','ที่มาและความสำคัญ','ความเป็นมาและความสำคัญของปัญหา','กรอบแนวคิดการวิจัย','background of the research','background and significance','rationale and conceptual framework'],
+ 'A:7':['วัตถุประสงค์ของโครงการวิจัย','วัตถุประสงค์การวิจัย','จุดมุ่งหมายของการวิจัย','เป้าหมายการวิจัย','objectives of the research','research objectives','study objectives'],
+ 'A:8':['การทบทวนวรรณกรรม','ทบทวนวรรณกรรม','งานวิจัยที่เกี่ยวข้อง','เอกสารและงานวิจัยที่เกี่ยวข้อง','แนวคิดทฤษฎีและงานวิจัยที่เกี่ยวข้อง','literature review','related literature','related research'],
+ 'A:9':['เอกสารอ้างอิง','บรรณานุกรม','รายการอ้างอิง','หนังสืออ้างอิง','references','bibliography','reference list'],
+ 'A:10':['กระบวนการและวิธีการดำเนินการ','กระบวนการและวิธีดำเนินโครงการวิจัย','วิธีดำเนินการวิจัย','ระเบียบวิธีวิจัย','วิธีการวิจัย','ขั้นตอนการดำเนินงานวิจัย','methodology','research methodology','research methods','study procedures'],
+ 'A:11':['ขอบเขตของโครงการวิจัย','ขอบเขตการวิจัย','ขอบเขตของการศึกษา','ขอบเขตงานวิจัย','scope of the research','research scope','scope of study'],
+ 'A:12':['แผนการดำเนินงานตลอดโครงการวิจัย','แผนการดำเนินงานวิจัย','แผนงานวิจัย','แผนปฏิบัติงาน','ตารางดำเนินงานวิจัย','research work plan','work plan','research timeline','project schedule'],
+ 'A:13':['ผลงานตามระยะเวลาการรายงานความก้าวหน้า','ผลผลิตตามแผนความก้าวหน้า','ผลงานเมื่อครบกึ่งหนึ่งของแผน','ผลที่คาดว่าจะได้รับระหว่างดำเนินงาน','research progress report','progress deliverables','interim outputs'],
+ 'A:14':['ผลลัพธ์ที่คาดว่าจะได้รับ','ผลที่คาดว่าจะได้รับ','ผลผลิตที่คาดว่าจะได้รับ','ประโยชน์ที่คาดว่าจะได้รับ','ผลสัมฤทธิ์ของโครงการ','expected outcomes','expected results','expected outputs'],
+ 'A:15':['การบูรณาการงานวิจัย','การบูรณาการโครงการวิจัย','การวิจัยแบบบูรณาการ','การบูรณาการข้ามศาสตร์','integration of research','research integration','interdisciplinary integration'],
+ 'A:16':['ระดับการถ่ายทอดสู่สังคม','การถ่ายทอดผลการวิจัยสู่สังคม','การนำผลวิจัยไปใช้ประโยชน์','การเผยแพร่และถ่ายทอดองค์ความรู้','social dissemination','knowledge transfer','research utilization','social impact'],
+ 'A:17':['รายละเอียดงบประมาณการวิจัย','งบประมาณการวิจัย','รายละเอียดค่าใช้จ่าย','แผนงบประมาณ','ค่าใช้จ่ายในการวิจัย','research budget','budget details','project budget','research expenses'],
+ 'A:18':['มาตรฐานการวิจัย','มาตรฐานและจริยธรรมการวิจัย','จริยธรรมการวิจัย','การรับรองมาตรฐานงานวิจัย','research standards','research ethics','ethical approval','research compliance'],
+ 'A:19':['คำชี้แจงอื่น','คำชี้แจงเพิ่มเติม','ข้อมูลเพิ่มเติม','หมายเหตุเพิ่มเติม','รายละเอียดอื่น ๆ','other clarifications','additional information','additional notes','other remarks'],
+ 'B:1':['ชื่อสกุล','ชื่อและนามสกุล','ชื่อผู้วิจัย','full name','researcher name'], 'B:2':['ตำแหน่งทางวิชาการ','ตำแหน่งวิชาการ','academic position','academic rank'],
+ 'B:3':['รหัสประจำตัวนักวิจัยแห่งชาติ','รหัสนักวิจัย','เลขประจำตัวนักวิจัย','national researcher id','researcher identification'],
+ 'B:4':['ประวัติการศึกษา','คุณวุฒิการศึกษา','การศึกษา','education','educational background'], 'B:5':['ประวัติการทำงาน','ประสบการณ์ทำงาน','working experience','employment history'],
+ 'B:6':['สาขาวิชาการที่มีความชำนาญ','ความเชี่ยวชาญ','ความชำนาญพิเศษ','field of expertise','specialization'],
+ 'B:7':['ประวัติการเผยแพร่ผลงานวิจัย','ผลงานตีพิมพ์','ผลงานวิชาการ','research publications','publication history'],
+ 'B:8':['ประวัติการนำเสนอผลงานวิจัย','ผลงานนำเสนอ','การประชุมวิชาการ','research presentations','conference presentations'],
+ 'B:9':['ผลงานวิจัยที่ได้รับการจดทะเบียน','ทรัพย์สินทางปัญญา','สิทธิบัตรและอนุสิทธิบัตร','intellectual property','patents'],
+ 'B:10':['ประสบการณ์ที่เกี่ยวข้องกับการบริหารงานวิจัย','ประสบการณ์บริหารงานวิจัย','research management experience','research administration experience'],
+ 'C:reviewers':['เสนอชื่อผู้ทรงคุณวุฒิ','ผู้ทรงคุณวุฒิอ่านรายงานวิจัย','รายชื่อผู้ทรงคุณวุฒิ','proposed reviewers','external reviewers']
 };
 const A:[number,RegExp[]][]=[
  [1,[/^คณะผู้วิจัย/u,/^(?:the )?researchers?\b/i]],
@@ -41,11 +60,11 @@ const A:[number,RegExp[]][]=[
  [3,[/^ความร่วมมือด้านการวิจัยกับหน่วยงานภายนอก/u,/^cooperation from other agenc/i,/^research collaboration/i]],
  [4,[/^ประเภทของการวิจัย/u,/^type of (?:the )?research/i]],
  [5,[/^คำสำคัญ/u,/^keywords?(?: of (?:the )?(?:project|research))?/i]],
- [6,[/^ความสำคัญ.*?(?:ที่มา|ปัญหา|กรอบแนว)/u,/^(?:the )?background of (?:the )?research/i,/^background and conceptual framework/i]],
+ [6,[/^(?:ความสำคัญ|ที่มา|หลักการและเหตุผล|ความเป็นมา).*?(?:ที่มา|ปัญหา|กรอบแนว|ความสำคัญ)?/u,/^(?:the )?background of (?:the )?research/i,/^background and (?:significance|conceptual framework)/i,/^rationale/i]],
  [7,[/^วัตถุประสงค์ของโครงการวิจัย/u,/^objectives? of (?:the )?research/i]],
  [8,[/^การทบทวนวรรณกรรม/u,/^literature review/i]],
  [9,[/^เอกสารอ้างอิง/u,/^references?\b/i]],
- [10,[/^กระบวนการและวิธีการดำเนิน/u,/^วิธีดำเนินการวิจัย/u,/^methodology\b/i]],
+ [10,[/^กระบวนการและวิธีการดำเนิน/u,/^วิธีดำเนินการวิจัย/u,/^ระเบียบวิธีวิจัย/u,/^วิธีการวิจัย/u,/^methodology\b/i,/^research methods?/i]],
  [11,[/^ขอบเขตของโครงการวิจัย/u,/^scope of (?:the )?research/i]],
  [12,[/^แผนการดำเนินงานตลอดโครงการวิจัย/u,/^working plan throughout/i,/^research work plan/i]],
  [13,[/^ผลงานตามระยะเวลาการรายงานความก้าวหน้า/u,/^research progress according/i,/^research progress report/i]],
@@ -151,6 +170,11 @@ export function segmentRs1Sections(doc:Pick<DocContent,'blocks'>,options:Heading
   if(match){
    const key=match.spec.key;
    if(result.sections[key]){
+    if(part!=='B'&&current?.key===key&&getNumber(paragraph).n===null){
+     append(current,{type:'paragraph',sourceIndex:index,text:paragraph,images:block.images});
+     result.warnings.push('ข้อความคล้ายหัวข้อซ้ำ เก็บเป็นเนื้อหาเพื่อตรวจสอบ: '+key);
+     return;
+    }
     result.warnings.push('หัวข้อซ้ำ: '+key);
     if(part==='B'){
      current=create(key,part,paragraph,index,match.matchedBy);

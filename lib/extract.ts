@@ -1,7 +1,7 @@
 import type {DocContent,SourceDocumentJson} from './docx';
 export type Field = {value:string|null; status:'found'|'missing'|'review'; source:string|null; warning?:string};
 export type Person = {name:string; affiliation:string; phone:string; email:string; responsibility:string; share:string};
-export type Biography = {thaiName:string;englishName:string;academicPosition:string;nationalId:string;education:string;employment:string;expertise:string;publications:string;presentations:string;intellectualProperty:string;researchManagementExperience:string;completedResearch:string;ongoingResearch:string};
+export type Biography = {thaiName:string;englishName:string;academicPosition:string;affiliation:string;nationalId:string;education:string;employment:string;expertise:string;publications:string;presentations:string;intellectualProperty:string;researchManagementExperience:string;completedResearch:string;ongoingResearch:string};
 export type Expert = {name:string; academicPosition:string; affiliation:string; email:string};
 export type Extraction = {fields:{
  projectTitleTH:Field;projectTitleEN:Field;principalInvestigator:Field;coResearchers:Field;strategy:Field;
@@ -137,7 +137,7 @@ export function extractRs1(doc:DocContent):Extraction {
   }
   if(current && (current.name||current.email||current.affiliation))experts.push(current);
  }
- const emptyBiography=():Biography=>({thaiName:'',englishName:'',academicPosition:'',nationalId:'',education:'',employment:'',expertise:'',publications:'',presentations:'',intellectualProperty:'',researchManagementExperience:'',completedResearch:'',ongoingResearch:''});
+  const emptyBiography=():Biography=>({thaiName:'',englishName:'',academicPosition:'',affiliation:'',nationalId:'',education:'',employment:'',expertise:'',publications:'',presentations:'',intellectualProperty:'',researchManagementExperience:'',completedResearch:'',ongoingResearch:''});
  const cleanBiographyValue=(key:keyof Biography,value:string):string=>{
   let result=withoutPlaceholder(value);
   const prefixes:Partial<Record<keyof Biography,RegExp[]>>={
@@ -148,10 +148,14 @@ export function extractRs1(doc:DocContent):Extraction {
    completedResearch:[/^ชื่อข้อเสนอโครงการวิจัย.*?การเผยแพร่ผลงานวิจัย\s*/],
    ongoingResearch:[/^ชื่อข้อเสนอโครงการวิจัย[\s\S]*?สถานภาพของงานวิจัย\s*/]
   };
-  for(const prefix of prefixes[key]??[])result=result.replace(prefix,'').trim();
+   for(const prefix of prefixes[key]??[])result=result.replace(prefix,'').trim();
+   if((key==='publications'||key==='presentations')&&/^ทั้งภายในและภายนอกประเทศ(?:\s+โปรดระบุ.*)?$/u.test(result))return '';
+   if(key==='researchManagementExperience'&&/^ทั้งภายในและต่างประเทศ(?:โดยระบุ|\s+โปรดระบุ|\s*$)/u.test(result))return '';
   return withoutPlaceholder(result);
  };
- const documentLines=[...p,...doc.tables.flat(2).map(clean)].filter(Boolean);
+  // Keep paragraph/table order from the DOCX. Appending all table cells after all
+  // paragraphs breaks biographies whose education and employment are tables.
+  const documentLines=doc.blocks.flatMap(block=>block.type==='paragraph'?[clean(block.text)]:block.rows.flatMap(row=>row.map(clean))).filter(Boolean);
  const biographyLabels=[
   {key:'englishName',re:/^(?:ชื่อ[-\s]*สกุลภาษาอังกฤษ|ชื่อ[-\s]*สกุล\s*\(ภาษาอังกฤษ\))\s*[:：-]?\s*(.*)$/i},
   {key:'academicPosition',re:/^ตำแหน่งทางวิชาการ\s*[:：-]?\s*(.*)$/},
@@ -188,6 +192,13 @@ export function extractRs1(doc:DocContent):Extraction {
     const [thaiName='',englishName='']=withoutPlaceholder(combinedName[1]).split(/\s+\/\s+/,2);
     current.thaiName=thaiName.trim();current.englishName=englishName.trim();activeKey='englishName';continue;
    }
+    const simpleName=line.match(/^ชื่อ\s*[:：-]?\s+(.+)$/u);
+    if(simpleName&&!/^ชื่อโครงการ/u.test(line)){
+     if(current.thaiName||current.englishName){biographies.push(current);current=emptyBiography();}
+     const name=withoutPlaceholder(simpleName[1]);
+     if(/[A-Za-z]/.test(name)&&!/[ก-๙]/u.test(name))current.englishName=name;else current.thaiName=name;
+     activeKey=/[A-Za-z]/.test(name)&&!/[ก-๙]/u.test(name)?'englishName':'thaiName';continue;
+    }
    const label=biographyLabels.find(item=>item.re.test(line));
    if(/ประวัติผู้ร่วมโครงการ/.test(line)){
     if(Object.values(current).some(Boolean))biographies.push(current);
@@ -195,7 +206,12 @@ export function extractRs1(doc:DocContent):Extraction {
    }
    if(label){
     activeKey=label.key;
-    current[label.key]=cleanBiographyValue(label.key,line.match(label.re)?.[1]??'');
+     let value=cleanBiographyValue(label.key,line.match(label.re)?.[1]??'');
+     if(label.key==='academicPosition'&&value){
+      const split=value.match(/^(ศาสตราจารย์|รองศาสตราจารย์|ผู้ช่วยศาสตราจารย์|อาจารย์|ศ\.|รศ\.|ผศ\.|อ\.)(.*)$/u);
+      if(split){value=split[1].trim();current.affiliation=withoutPlaceholder(split[2].replace(/^ประจำ/u,'').trim());}
+     }
+     current[label.key]=value;
     continue;
    }
    if(activeKey && !isFormInstruction(line) && !/^ส่วน\s*[ขค]\s*:|^ลงชื่อ|^ข้อมูลประวัติในส่วนนี้/.test(line)){
@@ -263,7 +279,7 @@ export function extractRs1(doc:DocContent):Extraction {
   const body=[header,...p.slice(objStart+1,end)].filter(s=>s && !headingPatterns.some(r=>heading(s,r))).join('\n').trim();objectives=make(withoutPlaceholder(body),`ระหว่างหัวข้อวัตถุประสงค์และการทบทวนวรรณกรรม`);
  }
  const outcome=section(p,/^ผลลัพธ์ที่คาดว่าจะได้รับจากงานวิจัย/,[/^การบูรณาการงานวิจัย/,/^ระดับการถ่ายทอดสู่สังคม/,/^รายละเอียดงบประมาณ/,/^มาตรฐานการวิจัย/]);
- const outcomeLines=outcome.text.split('\n').map(withoutPlaceholder).filter(line=>line&&!/^\s*(?:✓|☑|☒|☐)?\s*(?:ตีพิมพ์ในวารสาร|ตีพิมพ์วารสาร|นำเสนอในการประชุม|ทรัพย์สินทางปัญญา|อื่น ๆ)|^การบูรณาการงานวิจัย|^ภายใต้โครงการวิจัย|^ระดับการถ่ายทอดสู่สังคม|^สามารถนำไปถ่ายทอด|^ไม่มีการนำไปถ่ายทอด|^โปรดระบุ|^ระบุรายละเอียด|^เก็บข้อมูล/.test(line)&&!/^[.…\s_]+$/.test(line));
+  const outcomeLines=outcome.text.split('\n').map(withoutPlaceholder).filter(line=>line&&!/^\s*(?:✓|☑|☒|☐)?\s*(?:ตีพิมพ์ในวารสาร|ตีพิมพ์วารสาร|นำเสนอในการประชุม|ทรัพย์สินทางปัญญา|อื่น\s*ๆ)|^การบูรณาการงานวิจัย|^ภายใต้โครงการวิจัย|^ระดับการถ่ายทอดสู่สังคม|^สามารถนำไปถ่ายทอด|^ไม่มีการนำไปถ่ายทอด|^โปรดระบุ|^ระบุรายละเอียด|^เก็บข้อมูล/.test(line)&&!/^[.…\s_]+$/.test(line));
  const expectedOutcomes=make(outcomeLines.join('\n')||null,outcome.index>=0?'ส่วนผลลัพธ์ที่คาดว่าจะได้รับ':null);
  const significance=make(section(p,/^ความสำคัญที่มา/,[/^วัตถุประสงค์/]).text||null,'ส่วนความสำคัญ ที่มา และกรอบแนวความคิด');
  const literature=make(section(p,/^การทบทวนวรรณกรรม/,[/^เอกสารอ้างอิง/]).text||null,'ส่วนการทบทวนวรรณกรรม');

@@ -100,3 +100,21 @@ test('custom heading aliases remain local and configurable',()=>{
  assert.equal(result.sections['A:12'].matchedBy,'fuzzy-label');
  assert.match(result.sections['A:12'].text,/กิจกรรมทดสอบ/u);
 });
+
+test('routes common RS-1 heading variants through the built-in alias library',()=>{
+ const result=segmentRs1Sections({blocks:[
+  p('ส่วน ก : สาระสำคัญ'),
+  p('6. หลักการและเหตุผล'),p('เหตุผลของโครงการ'),
+  p('9. บรรณานุกรม'),p('รายการอ้างอิงตัวอย่าง'),
+  p('10. ระเบียบวิธีวิจัย'),p('ขั้นตอนดำเนินงาน'),
+  p('12. ตารางดำเนินงานวิจัย'),p('เดือนที่หนึ่ง'),
+  p('14. ผลที่คาดว่าจะได้รับ'),p('ผลลัพธ์ตัวอย่าง'),
+  p('17. แผนงบประมาณ'),p('ค่าใช้จ่ายตัวอย่าง')
+ ]});
+ assert.equal(result.sections['A:6'].text,'เหตุผลของโครงการ');
+ assert.equal(result.sections['A:9'].text,'รายการอ้างอิงตัวอย่าง');
+ assert.equal(result.sections['A:10'].text,'ขั้นตอนดำเนินงาน');
+ assert.equal(result.sections['A:12'].text,'เดือนที่หนึ่ง');
+ assert.equal(result.sections['A:14'].text,'ผลลัพธ์ตัวอย่าง');
+ assert.equal(result.sections['A:17'].text,'ค่าใช้จ่ายตัวอย่าง');
+});
