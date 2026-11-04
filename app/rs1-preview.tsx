@@ -1,5 +1,5 @@
 'use client';
-import type {ProjectForm} from './page';
+import type {ProjectForm} from './rs1-app';
 
 const show=(text?:string)=>text?.trim()||'-';
 function Section({number,title,value}:{number:string;title:string;value:string}){return <section className="document-section"><h2>{number}. {title}</h2><div className="document-value">{show(value)}</div></section>}
