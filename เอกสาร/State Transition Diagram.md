@@ -6,7 +6,7 @@
 **Version:** 1.5 — Revised to align with Requirements v1.5  
 **วันที่:** 12 พฤศจิกายน 2569  
 **สถานะ:** Draft — มีบางเงื่อนไขรอการยืนยันจาก Stakeholder  
-**เอกสารอ้างอิง:** `requirements-v1.5-th-gap-reviewed.md`, To-Be Workflow, แบบฟอร์ม RS-1, ขั้นตอนทุนวิจัยส่วนตัว พ.ศ. 2570 และคำตอบ Stakeholder วันที่ 12 พฤศจิกายน 2569
+**เอกสารอ้างอิง:** To-Be Workflow, แบบฟอร์ม RS-1, ขั้นตอนทุนวิจัยส่วนตัว พ.ศ. 2570 และคำตอบ Stakeholder วันที่ 12 พฤศจิกายน 2569
 
 ## 1. วัตถุประสงค์และขอบเขต
 
@@ -138,4 +138,4 @@ flowchart TD
 | ก่อน v1.5 | 8 สถานะหลัก; `TR-01`–`TR-16`; ประเมินรอบเดียว; e-Office แยกจาก Web |
 | **v1.5** | เปลี่ยนแผนภาพเป็น `flowchart TD` แบบเส้นทางหลัก; เพิ่ม RS-1 ลงนามและความยินยอมใน `TR-05`; เชื่อมมาตรฐานวิจัยกับ `TR-09` แบบรอยืนยัน; ยืนยันการขยายเวลา `TR-10` และประเมินหนึ่งรอบ `TR-15`–`16`; เพิ่มทะเบียนยกเลิก/ลาออก ไม่ส่งเอกสารตามกำหนด และข้อมูลผลประเมินเป็นประเด็นรอการยืนยัน |
 
-**เอกสารที่ต้องปรับตามเมื่อมีคำตอบเพิ่มเติม:** `requirements-v1.5-th-gap-reviewed.md`, `researcher-flow.md`, `staff-flow.md`, `reviewer-flow.md`, `use-case-diagram.md`, `use-case-specification.md`, Test Cases และ Data Dictionary; ให้เปลี่ยนรหัส/เงื่อนไขที่เกี่ยวข้องให้ตรงกันใน Commit เดียวกัน
+**เอกสารที่ต้องปรับตามเมื่อมีคำตอบเพิ่มเติม:** Requirements, User Flow, Use Case Diagram, Use Case Specification, Test Cases และ Data Dictionary; ให้เปลี่ยนรหัส/เงื่อนไขที่เกี่ยวข้องให้ตรงกันใน Commit เดียวกัน
