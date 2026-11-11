@@ -15,7 +15,7 @@
 ## 2. State Transition Diagram
 
 
-
+```mermaid
 flowchart TD
     START((เริ่มต้น))
     DRAFT["ร่างข้อเสนอโครงการ"]
@@ -55,7 +55,7 @@ flowchart TD
     class DRAFT,AFF,PROG normal
     class STAFF,COMM,CLOSE_REV,EVAL review
     class CLOSED finish
-
+```
 
 
 **หมายเหตุ:** การกลับจาก `StaffReview` ไป `Affiliation` และการจัดการกรณีผลประเมิน “ไม่รับรอง” ยังต้องตกลงกับ Stakeholder; ลูกศรข้ามไป `Closed` ต้องเกิดหลังเจ้าหน้าที่ตรวจเอกสารและบันทึกปิด ไม่ใช่เกิดเพียงเพราะมีการอัปโหลดไฟล์
