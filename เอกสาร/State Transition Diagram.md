@@ -15,43 +15,47 @@
 ## 2. State Transition Diagram
 
 
-stateDiagram-v2
-    direction LR
 
-    state "ร่างข้อเสนอโครงการ" as Draft
-    state "รอต้นสังกัดพิจารณา" as Affiliation
-    state "รอเจ้าหน้าที่ตรวจสอบ" as StaffReview
-    state "รอเสนอคณะกรรมการเพื่อทราบ" as Committee
-    state "ดำเนินการวิจัย" as InProgress
-    state "รอตรวจเอกสารปิดโครงการ" as ClosureReview
-    state "อยู่ระหว่างประเมินรายงาน" as Evaluation
-    state "ปิดโครงการแล้ว" as Closed
+flowchart TD
+    START((เริ่มต้น))
+    DRAFT["ร่างข้อเสนอโครงการ"]
+    AFF["รอต้นสังกัดพิจารณา"]
+    STAFF["รอเจ้าหน้าที่ตรวจสอบ"]
+    COMM["รอเสนอคณะกรรมการเพื่อทราบ"]
+    PROG["ดำเนินการวิจัย"]
+    CLOSE_REV["รอตรวจเอกสารปิดโครงการ"]
+    EVAL["อยู่ระหว่างประเมินรายงาน"]
+    CLOSED["ปิดโครงการแล้ว"]
+    END((สิ้นสุด))
 
-    [*] --> Draft: สร้างโครงการ
+    START -->|TR-01| DRAFT
+    DRAFT -->|TR-03| AFF
+    AFF -->|TR-05| STAFF
+    STAFF -->|TR-08| COMM
+    COMM -->|TR-09| PROG
+    PROG -->|TR-11| CLOSE_REV
 
-    Draft --> Draft: แก้ไข RS-1
-    Draft --> Affiliation: PDF พร้อมยื่น
+    CLOSE_REV -->|TR-13: รายงาน 5 บท| EVAL
+    CLOSE_REV -->|TR-14: ผลงานเผยแพร่| CLOSED
+    EVAL -->|TR-16| CLOSED
+    CLOSED --> END
 
-    Affiliation --> Affiliation: แก้ไขข้อเสนอ
-    Affiliation --> StaffReview: แนบหลักฐานและยืนยันส่ง
+    DRAFT -.->|TR-02| DRAFT
+    AFF -.->|TR-04| AFF
+    STAFF -.->|TR-06| STAFF
+    STAFF -.->|TR-07| AFF
+    PROG -.->|TR-10| PROG
+    CLOSE_REV -.->|TR-12| CLOSE_REV
+    EVAL -.->|TR-15| EVAL
 
-    StaffReview --> StaffReview: ส่งกลับแก้ไข / ส่งใหม่
-    StaffReview --> Affiliation: ขอความเห็นชอบใหม่
-    StaffReview --> Committee: ตรวจผ่าน
+    classDef normal fill:#eff6ff,stroke:#2563eb,color:#1e3a8a
+    classDef review fill:#fff7ed,stroke:#ea580c,color:#9a3412
+    classDef finish fill:#dcfce7,stroke:#16a34a,color:#166534
 
-    Committee --> InProgress: บันทึกรับรอง
+    class DRAFT,AFF,PROG normal
+    class STAFF,COMM,CLOSE_REV,EVAL review
+    class CLOSED finish
 
-    InProgress --> InProgress: เปลี่ยนแปลง / ขยายเวลา
-    InProgress --> ClosureReview: ส่งเอกสารปิด
-
-    ClosureReview --> ClosureReview: ส่งเอกสารเพิ่มเติม
-    ClosureReview --> Evaluation: รายงาน 5 บท
-    ClosureReview --> Closed: ผลงานเผยแพร่ครบ
-
-    Evaluation --> Evaluation: ประเมิน / ส่ง Final
-    Evaluation --> Closed: ตรวจครบ / บันทึกปิด
-
-    Closed --> [*]
 
 
 **หมายเหตุ:** การกลับจาก `StaffReview` ไป `Affiliation` และการจัดการกรณีผลประเมิน “ไม่รับรอง” ยังต้องตกลงกับ Stakeholder; ลูกศรข้ามไป `Closed` ต้องเกิดหลังเจ้าหน้าที่ตรวจเอกสารและบันทึกปิด ไม่ใช่เกิดเพียงเพราะมีการอัปโหลดไฟล์
