@@ -14,9 +14,9 @@
 
 ## 2. State Transition Diagram
 
-```mermaid
+
 stateDiagram-v2
-    direction TB
+    direction LR
 
     state "ร่างข้อเสนอโครงการ" as Draft
     state "รอต้นสังกัดพิจารณา" as Affiliation
@@ -27,32 +27,32 @@ stateDiagram-v2
     state "อยู่ระหว่างประเมินรายงาน" as Evaluation
     state "ปิดโครงการแล้ว" as Closed
 
-    [*] --> Draft: นักวิจัยสร้างและบันทึกโครงการใหม่
+    [*] --> Draft: สร้างโครงการ
 
-    Draft --> Draft: บันทึกหรือแก้ไขร่าง RS-1
-    Draft --> Affiliation: นักวิจัยสร้าง/ดาวน์โหลด PDF ฉบับพร้อมยื่น
+    Draft --> Draft: แก้ไข RS-1
+    Draft --> Affiliation: PDF พร้อมยื่น
 
-    Affiliation --> Affiliation: ต้นสังกัดพิจารณา / นักวิจัยปรับข้อเสนอ
-    Affiliation --> StaffReview: แนบหลักฐานเห็นชอบและกดยืนยันส่งผ่าน Web
+    Affiliation --> Affiliation: แก้ไขข้อเสนอ
+    Affiliation --> StaffReview: แนบหลักฐานและยืนยันส่ง
 
-    StaffReview --> StaffReview: ส่งกลับแก้ไข / แก้ไขและยืนยันส่งใหม่
-    StaffReview --> Affiliation: ต้องขอความเห็นชอบต้นสังกัดใหม่ (รอยืนยันเกณฑ์)
-    StaffReview --> Committee: เจ้าหน้าที่ตรวจผ่าน
+    StaffReview --> StaffReview: ส่งกลับแก้ไข / ส่งใหม่
+    StaffReview --> Affiliation: ขอความเห็นชอบใหม่
+    StaffReview --> Committee: ตรวจผ่าน
 
-    Committee --> InProgress: เจ้าหน้าที่บันทึกรับรองโครงการ
+    Committee --> InProgress: บันทึกรับรอง
 
-    InProgress --> InProgress: ติดตามโครงการ / เปลี่ยนแปลง / ขยายเวลา
-    InProgress --> ClosureReview: นักวิจัยส่งเอกสารขอปิดโครงการ
+    InProgress --> InProgress: เปลี่ยนแปลง / ขยายเวลา
+    InProgress --> ClosureReview: ส่งเอกสารปิด
 
-    ClosureReview --> ClosureReview: เอกสารไม่ครบ / ส่งเอกสารเพิ่มเติม
-    ClosureReview --> Evaluation: เส้นทางรายงาน 5 บท: เจ้าหน้าที่รับเรื่องประเมิน
-    ClosureReview --> Closed: เส้นทางผลงานเผยแพร่: ตรวจครบและบันทึกปิด
+    ClosureReview --> ClosureReview: ส่งเอกสารเพิ่มเติม
+    ClosureReview --> Evaluation: รายงาน 5 บท
+    ClosureReview --> Closed: ผลงานเผยแพร่ครบ
 
-    Evaluation --> Evaluation: ผู้ทรงประเมินครั้งเดียว / ส่งรายงานฉบับสมบูรณ์
-    Evaluation --> Closed: ผลประเมินและเอกสารครบ / เจ้าหน้าที่บันทึกปิด
+    Evaluation --> Evaluation: ประเมิน / ส่ง Final
+    Evaluation --> Closed: ตรวจครบ / บันทึกปิด
 
     Closed --> [*]
-```
+
 
 **หมายเหตุ:** การกลับจาก `StaffReview` ไป `Affiliation` และการจัดการกรณีผลประเมิน “ไม่รับรอง” ยังต้องตกลงกับ Stakeholder; ลูกศรข้ามไป `Closed` ต้องเกิดหลังเจ้าหน้าที่ตรวจเอกสารและบันทึกปิด ไม่ใช่เกิดเพียงเพราะมีการอัปโหลดไฟล์
 
@@ -92,7 +92,6 @@ stateDiagram-v2
 
 ## 5. กฎประกอบที่ไม่ใช่สถานะหลัก
 
-- **การส่งกลับแก้ไข:** ใช้ `action_required_by = RESEARCHER` และบันทึกเหตุผล/รายการแก้ไข ขณะที่ `project_status` ยังเป็น `STAFF_REVIEW`; เมื่อยืนยันส่งใหม่ เปลี่ยนผู้รอดำเนินการเป็น `STAFF` (ชื่อฟิลด์เป็นข้อเสนอเชิงออกแบบ)
 - **การอัปโหลดไฟล์:** การแนบหลักฐานอย่างเดียวไม่เท่ากับส่งข้อเสนอ ต้องมีการกดยืนยันส่งให้ชัดเจน
 - **PDF:** Preview ไม่ควรทำให้เปลี่ยนสถานะ; การเปลี่ยนเป็นรอต้นสังกัดใช้เหตุการณ์จัดทำ PDF **ฉบับพร้อมยื่น** ตามแนวทางออกแบบของทีม
 - **e-Office:** เป็นกระบวนการเอกสารทางการที่ดำเนินคู่ขนานกับ Web; ไม่ถือว่า Web เชื่อมต่อระบบ e-Office โดยอัตโนมัติ
