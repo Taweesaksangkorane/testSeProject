@@ -1,0 +1,11 @@
+unit: extract-api
+commit: false
+candidate_splits:
+  - id: "lib/docx.ts:190"
+    drivers: [protocol_split, concern_split]
+    rationale: "DOCX OOXML and legacy DOC text parsing have different structural evidence and failure modes; future PDF/OCR adapters should implement the same unified document boundary rather than enter field extraction directly."
+    source_slice: {file: lib/docx.ts, lines: [190, 270]}
+  - id: "lib/rs1-pipeline.ts:96"
+    drivers: [concern_split, reuse_split]
+    rationale: "Section routing, per-section extraction, and cross-field validation are separate contracts that can grow independently as real fixtures reveal new template variants."
+    source_slice: {file: lib/rs1-pipeline.ts, lines: [29, 110]}

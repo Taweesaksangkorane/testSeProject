@@ -1,0 +1,74 @@
+units:
+  - name: rs1-form-page
+    trigger: page
+    trigger_detail: "GET / and browser interactions for upload, review, edit, preview, and export"
+    source_anchors:
+      - path: app/page.tsx
+        line: 84
+    exported_signature:
+      - method: "ReactElement Home()"
+        source_loc: "app/page.tsx:84"
+        stability: must_preserve
+      - method: "ProjectForm"
+        source_loc: "app/page.tsx:17"
+        stability: must_preserve
+    dynamic_entrypoints:
+      - target: "app/page.tsx default export"
+        mechanism: convention
+        source_loc: "app/page.tsx:84"
+    depends_on:
+      - unit: extract-api
+        via: "POST /api/extract multipart upload"
+      - unit: generate-docx-api
+        via: "POST /api/generate-docx JSON form"
+      - unit: convert-docx-pdf-api
+        via: "POST /api/convert-docx-pdf DOCX bytes"
+    shared_refs: []
+  - name: extract-api
+    trigger: route
+    trigger_detail: "POST /api/extract"
+    source_anchors:
+      - path: app/api/extract/route.ts
+        line: 13
+    exported_signature:
+      - method: "Promise<Response> POST(request: Request)"
+        source_loc: "app/api/extract/route.ts:13"
+        stability: frozen
+    dynamic_entrypoints:
+      - target: "app/api/extract/route.ts POST"
+        mechanism: convention
+        source_loc: "app/api/extract/route.ts:13"
+    depends_on: []
+    shared_refs: []
+  - name: generate-docx-api
+    trigger: route
+    trigger_detail: "POST /api/generate-docx"
+    source_anchors:
+      - path: app/api/generate-docx/route.ts
+        line: 144
+    exported_signature:
+      - method: "Promise<Response> POST(request: Request)"
+        source_loc: "app/api/generate-docx/route.ts:144"
+        stability: frozen
+    dynamic_entrypoints:
+      - target: "app/api/generate-docx/route.ts POST"
+        mechanism: convention
+        source_loc: "app/api/generate-docx/route.ts:144"
+    depends_on: []
+    shared_refs: []
+  - name: convert-docx-pdf-api
+    trigger: route
+    trigger_detail: "POST /api/convert-docx-pdf"
+    source_anchors:
+      - path: app/api/convert-docx-pdf/route.ts
+        line: 12
+    exported_signature:
+      - method: "Promise<Response> POST(request: Request)"
+        source_loc: "app/api/convert-docx-pdf/route.ts:12"
+        stability: frozen
+    dynamic_entrypoints:
+      - target: "app/api/convert-docx-pdf/route.ts POST"
+        mechanism: convention
+        source_loc: "app/api/convert-docx-pdf/route.ts:12"
+    depends_on: []
+    shared_refs: []

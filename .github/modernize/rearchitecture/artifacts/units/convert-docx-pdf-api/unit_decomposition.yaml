@@ -1,0 +1,7 @@
+unit: convert-docx-pdf-api
+commit: false
+candidate_splits:
+  - id: "app/api/convert-docx-pdf/route.ts:12"
+    drivers: [execution_model_split, lifecycle_split]
+    rationale: "HTTP validation and temporary-file cleanup are portable, while the Word COM conversion worker has a Windows-only lifecycle and should remain replaceable behind the same byte contract."
+    source_slice: {file: app/api/convert-docx-pdf/route.ts, lines: [12, 25]}

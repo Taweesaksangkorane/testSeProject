@@ -1,0 +1,19 @@
+unit: generate-docx-api
+side_effects:
+  - source_loc: "app/api/generate-docx/route.ts:144"
+    effect: "Reads the native private DOCX template and returns an in-memory generated DOCX; it does not persist user data."
+    must_preserve: true
+branches:
+  - source_loc: "app/api/generate-docx/route.ts:144"
+    condition: "Request JSON is invalid or template transformation fails."
+    behavior: "Return a JSON error rather than a corrupt DOCX."
+    must_preserve: true
+error_paths:
+  - source_loc: "app/api/generate-docx/route.ts:144"
+    trigger: "Invalid request or generation failure."
+    outcome: "Return 400 or 500 JSON error."
+    contract: "HTTP JSON {error:string}"
+    must_preserve: true
+concurrency:
+  model: async
+  tx_boundary: null

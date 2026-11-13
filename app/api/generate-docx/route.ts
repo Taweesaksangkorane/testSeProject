@@ -2,6 +2,7 @@ import {readFile} from 'node:fs/promises';
 import path from 'node:path';
 import JSZip from 'jszip';
 import {NextResponse} from 'next/server';
+import {wordParagraphs,type Rs1TextLayout} from '../../../lib/rs1-pdf-layout';
 
 export const runtime='nodejs';
 
@@ -18,10 +19,44 @@ type FormData={
 
 const escapeXml=(value:string)=>value.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&apos;');
 const text=(value:unknown)=>typeof value==='string'?value.trim():'';
-const joined=(record?:Record<string,string>)=>record?Object.values(record).map(text).filter(Boolean).join(', '):'';
-const enteredText=(value:string)=>value.trim().replace(/\r\n?/g,'\n').replace(/\n[ \t]*\n+/g,'\u0000').replace(/\n/g,' ').replace(/[ \t]{2,}/g,' ').replace(/\u0000/g,'\n').replace(/[ \t]+(?=(?:\d{1,2}[.)]|[-•▪])\s+)/g,'\n');
+const shown=(value:unknown)=>text(value)||'-';
+const joined=(record?:Record<string,string>)=>record?Object.values(record).map(text).filter(Boolean).join(', ')||'-':'-';
+function enteredText(value:string){
+ const blocks=value.trim().replace(/\r\n?/g,'\n').split(/\n[ \t]*\n+/).map(block=>{
+  const lines=block.split('\n').map(line=>line.replace(/[ \t]{2,}/g,' ').trim()).filter(Boolean);
+  return lines.reduce((result,line,index)=>{
+   if(index===0)return line;
+   const startsList=/^(?:\d+[.)]|[-•▪◦○o])\s+/u.test(line);
+   return `${result}${startsList?'\n':' '}${line}`;
+  },'');
+ }).filter(Boolean);
+ let result='';
+ blocks.forEach((block,index)=>{
+    if(index)result+='\n\n';
+  result+=block;
+ });
+ return result.replace(/[ \t]+(?=(?:\(?\d{1,2}[.)]|[ก-ฮ][.)]|[-•▪◦○])\s+)/gu,'\n');
+}
 const referencesText=(value:string)=>enteredText(value).replace(/(?<=\.)\s+(?=[A-Z][A-Za-zÀ-ž]{2,}[A-Za-zÀ-ž&.,'’ -]{0,98}\(\d{4}\))/g,'\u2028');
 const textXml=(value:string)=>escapeXml(enteredText(value)).replace(/[\n\u2028]/g,'</w:t><w:br/><w:t xml:space="preserve">');
+const enteredRun='<w:r><w:rPr><w:rFonts w:ascii="TH Sarabun New" w:eastAsia="TH Sarabun New" w:hAnsi="TH Sarabun New" w:cs="TH Sarabun New"/><w:color w:val="000000"/><w:sz w:val="28"/><w:szCs w:val="28"/></w:rPr>';
+function paragraphPropertyXml(paragraph:string){
+ const property=paragraph.match(/<w:pPr(?:\s[^>]*)?>[\s\S]*?<\/w:pPr>/)?.[0];
+ return property??'<w:pPr><w:jc w:val="left"/><w:spacing w:after="0" w:line="240" w:lineRule="auto"/></w:pPr>';
+}
+function enteredParagraphs(value:string,property:string){
+ const blocks=enteredText(value).split(/\n{2,}/).filter(Boolean);
+ return blocks.map(block=>`<w:p>${property}${enteredRun}<w:t xml:space="preserve">${textXml(block)}</w:t></w:r></w:p>`).join('');
+}
+const thaiMonths=['มกราคม','กุมภาพันธ์','มีนาคม','เมษายน','พฤษภาคม','มิถุนายน','กรกฎาคม','สิงหาคม','กันยายน','ตุลาคม','พฤศจิกายน','ธันวาคม'];
+function thaiDate(value:unknown){
+ const raw=text(value);if(!raw)return '';
+ const match=raw.match(/^(\d{4})-(\d{2})-(\d{2})$/);if(!match)return raw;
+ const year=Number(match[1]),month=Number(match[2]),day=Number(match[3]);
+ if(!thaiMonths[month-1]||!day)return raw;
+ return `${day} ${thaiMonths[month-1]} ${year+543}`;
+}
+function dateRange(start:unknown,end:unknown){const from=thaiDate(start),to=thaiDate(end);return from||to?`${from||'-'} – ${to||'-'}`:'-';}
 function leftAlignedParagraph(paragraph:string){
  const withoutAlignment=paragraph.replace(/<w:jc\b[^>]*\/?\s*>/g,'');
  if(/<w:pPr(?:\s[^>]*)?>[\s\S]*?<\/w:pPr>/.test(withoutAlignment))return withoutAlignment.replace(/<\/w:pPr>/,'<w:jc w:val="left"/></w:pPr>');
@@ -33,27 +68,49 @@ function blackRun(run:string){
  if(/<w:rPr(?:\s[^>]*)?>/.test(withoutInheritedStyle))return withoutInheritedStyle.replace(/<w:rPr(?:\s[^>]*)?>/,match=>`${match}${enteredStyle}`);
  return withoutInheritedStyle.replace(/<w:r(?:\s[^>]*)?>/,match=>`${match}<w:rPr>${enteredStyle}</w:rPr>`);
 }
-function replaceParagraph(paragraph:string,value:string){
- const safe=textXml(value);
- if(/<w:r(?:\s[^>]*)?>[\s\S]*?<\/w:r>/.test(paragraph)){
-  let first=true;
-  return leftAlignedParagraph(paragraph.replace(/<w:r(?:\s[^>]*)?>[\s\S]*?<\/w:r>/g,run=>{if(!/<w:t(?:\s[^>]*)?>[\s\S]*?<\/w:t>/.test(run))return run;if(!first)return run.replace(/<w:t(?:\s[^>]*)?>[\s\S]*?<\/w:t>/g,'<w:t></w:t>');first=false;return blackRun(run.replace(/<w:t(?:\s[^>]*)?>[\s\S]*?<\/w:t>/g,`<w:t xml:space="preserve">${safe}</w:t>`))}));
- }
- const end=paragraph.lastIndexOf('</w:p>');
- return leftAlignedParagraph(`${paragraph.slice(0,end)}<w:r><w:rPr><w:rFonts w:ascii="TH Sarabun New" w:eastAsia="TH Sarabun New" w:hAnsi="TH Sarabun New" w:cs="TH Sarabun New"/><w:color w:val="000000"/><w:sz w:val="28"/><w:szCs w:val="28"/></w:rPr><w:t xml:space="preserve">${safe}</w:t></w:r>${paragraph.slice(end)}`);
+function replaceParagraph(paragraph:string,value:string,layout?:Rs1TextLayout){
+ if(layout)return wordParagraphs(value,layout);
+ return enteredParagraphs(value,paragraphPropertyXml(leftAlignedParagraph(paragraph)));
 }
-function appendParagraph(paragraph:string,value:string,separate=false){
+function appendParagraph(paragraph:string,value:string,separate=false,layout?:Rs1TextLayout){
  if(!value)return paragraph;
- const safe=textXml(value);
- if(separate)return `${paragraph}<w:p><w:pPr><w:spacing w:after="0" w:line="240" w:lineRule="auto"/><w:jc w:val="left"/></w:pPr><w:r><w:rPr><w:rFonts w:ascii="TH Sarabun New" w:eastAsia="TH Sarabun New" w:hAnsi="TH Sarabun New" w:cs="TH Sarabun New"/><w:color w:val="000000"/><w:sz w:val="28"/><w:szCs w:val="28"/></w:rPr><w:t xml:space="preserve">${safe}</w:t></w:r></w:p>`;
- const end=paragraph.lastIndexOf('</w:p>');return leftAlignedParagraph(`${paragraph.slice(0,end)}<w:r><w:rPr><w:rFonts w:ascii="TH Sarabun New" w:eastAsia="TH Sarabun New" w:hAnsi="TH Sarabun New" w:cs="TH Sarabun New"/><w:color w:val="000000"/><w:sz w:val="28"/><w:szCs w:val="28"/></w:rPr><w:t xml:space="preserve"> ${safe}</w:t></w:r>${paragraph.slice(end)}`);
+ if(layout)return wordParagraphs(value,layout);
+ const property=paragraphPropertyXml(leftAlignedParagraph(paragraph));
+ if(separate)return `${paragraph}${enteredParagraphs(value,property)}`;
+ const blocks=enteredText(value).split(/\n{2,}/).filter(Boolean);
+ const first=blocks.shift()??'';
+ const end=paragraph.lastIndexOf('</w:p>');
+ const appended=`<w:r><w:rPr><w:rFonts w:ascii="TH Sarabun New" w:eastAsia="TH Sarabun New" w:hAnsi="TH Sarabun New" w:cs="TH Sarabun New"/><w:color w:val="000000"/><w:sz w:val="28"/><w:szCs w:val="28"/></w:rPr><w:t xml:space="preserve"> ${textXml(first)}</w:t></w:r>`;
+ return leftAlignedParagraph(`${paragraph.slice(0,end)}${appended}${paragraph.slice(end)}${blocks.map(block=>enteredParagraphs(block,property)).join('')}`);
 }
+const biographyHeadings:Record<number,string>={
+  188:'ชื่อ-สกุล (ภาษาไทย/ภาษาอังกฤษ)',
+  189:'ตำแหน่งทางวิชาการ',
+  190:'รหัสประจำตัวนักวิจัยแห่งชาติ (ถ้ามี)',
+  191:'ประวัติการศึกษา',
+  192:'ประวัติการทำงาน',
+  193:'สาขาวิชาการที่มีความชำนาญพิเศษ',
+  194:'ประวัติการเผยแพร่ผลงานวิจัย',
+  195:'ประวัติการนำเสนอผลงานวิจัย',
+  196:'ผลงานวิจัยด้านทรัพย์สินทางปัญญา',
+  197:'ประสบการณ์ที่เกี่ยวข้องกับการบริหารงานวิจัย',
+  198:'งานวิจัยที่ทำเสร็จแล้ว',
+  199:'งานวิจัยที่กำลังทำ'
+};
 function fillParagraphs(xml:string,values:Map<number,string>,appends:Map<number,string>,checks:Map<number,boolean>){
+ const layouts=new Map<number,Rs1TextLayout>([
+  [37,'body'],[39,'objectives'],[41,'body'],[43,'references'],[45,'body'],[47,'body'],[65,'body'],[72,'body'],[78,'body'],[162,'body'],
+ ]);
  let index=0;
  return xml.replace(/<w:p(?:\s[^>]*)?>[\s\S]*?<\/w:p>/g,paragraph=>{
   let result=paragraph;
-  if(values.has(index))result=replaceParagraph(result,values.get(index)??'');
-  if(appends.has(index))result=appendParagraph(result,appends.get(index)??'',[29,31,35,45,47].includes(index));
+  if(values.has(index))result=replaceParagraph(result,values.get(index)??'',layouts.get(index));
+  if(appends.has(index)){
+   const heading=biographyHeadings[index];
+   result=heading
+    ? replaceParagraph(result,`${heading} ${appends.get(index)??''}`)
+    : appendParagraph(result,appends.get(index)??'',[29,31,35,45,47].includes(index),layouts.get(index));
+  }
   if(checks.has(index))result=result.replace(/(<w:sym\b[^>]*w:char=")[A-Fa-f0-9]+("[^>]*\/?>)/g,`$1${checks.get(index)?'F0FE':'F0A8'}$2`);
   index++;
   return result;
@@ -107,6 +164,18 @@ function improvePageFlow(xml:string){
   return result;
  });
 }
+function normalizeBiographyHeading(xml:string){
+ return xml.replace(/<w:p(?:\s[^>]*)?>[\s\S]*?<\/w:p>/g,paragraph=>{
+  const plain=[...paragraph.matchAll(/<w:t(?:\s[^>]*)?>([\s\S]*?)<\/w:t>/g)].map(match=>match[1]).join('');
+  if(!plain.includes('ส่วน ข : ประวัติคณะผู้วิจัย'))return paragraph;
+  let replaced=false;
+  return paragraph.replace(/<w:t(?:\s[^>]*)?>[\s\S]*?<\/w:t>/g,tag=>{
+   if(replaced)return tag.replace(/(<w:t(?:\s[^>]*)?>)[\s\S]*?(<\/w:t>)/,'$1$2');
+   replaced=true;
+   return tag.replace(/(<w:t(?:\s[^>]*)?>)[\s\S]*?(<\/w:t>)/,'$1ประวัติผู้วิจัย$2');
+  });
+ });
+}
 function normalizeBodyTypography(xml:string){
  return xml.replace(/<w:sz w:val="32"\s*\/>/g,'<w:sz w:val="28"/>').replace(/<w:szCs w:val="32"\s*\/>/g,'<w:szCs w:val="28"/>');
 }
@@ -122,18 +191,18 @@ function stripRedGuidance(xml:string){
 function fields(form:FormData){
  const p=form.principal??{},co=form.coResearchers?.[0]??{},schedule=form.schedule??[],bio=form.principalBiography??{},experts=form.experts??[],signatures=form.signatures??[];
  const values=new Map<number,string>([
-  [3,`(ภาษาไทย) ${text(form.titleTH)}`],[4,`(ภาษาอังกฤษ) ${text(form.titleEN)}`],
-  [33,text(form.researchType)],[37,text(form.significance)],[39,text(form.objectives)],[41,text(form.literature)],[43,referencesText(text(form.references))],
-  [56,`1. ${text(schedule[0]?.activity)}`],[57,text(schedule[0]?.period)],[58,`2. ${text(schedule[1]?.activity)}`],[59,text(schedule[1]?.period)],[60,`3. ${text(schedule[2]?.activity)}`],[61,text(schedule[2]?.period)],[62,`4. ${text(schedule[3]?.activity)}`],[63,text(schedule[3]?.period)],
-  [72,[text(form.outcomes),text(form.publicationOther)].filter(Boolean).join('\n')],[78,[text(form.integration),text(form.integrationDetails)].filter(Boolean).join(': ')],
-  [162,text(form.otherNotes)],[166,`(${text(form.advisorDetails?.name)})`],[172,`(${text(p.name)})`],[178,`(${text(co.name)})`],
+  [3,`(ภาษาไทย) ${shown(form.titleTH)}`],[4,`(ภาษาอังกฤษ) ${shown(form.titleEN)}`],
+  [33,shown(form.researchType)],[37,shown(form.significance)],[39,shown(form.objectives)],[41,shown(form.literature)],[43,referencesText(shown(form.references))],
+  [56,`1. ${shown(schedule[0]?.activity)}`],[57,shown(schedule[0]?.period)],[58,`2. ${shown(schedule[1]?.activity)}`],[59,shown(schedule[1]?.period)],[60,`3. ${shown(schedule[2]?.activity)}`],[61,shown(schedule[2]?.period)],[62,`4. ${shown(schedule[3]?.activity)}`],[63,shown(schedule[3]?.period)],
+  [72,[text(form.outcomes),text(form.publicationOther)].filter(Boolean).join('\n')||'-'],[78,[text(form.integration),text(form.integrationDetails)].filter(Boolean).join(': ')||'-'],
+  [162,shown(form.otherNotes)],[166,`(${shown(form.advisorDetails?.name)})`],[172,`(${shown(p.name)})`],[178,`(${shown(co.name)})`],
  ]);
- const appends=new Map<number,string>([[14,text(p.name)],[15,text(p.affiliation)],[16,text(p.phone)],[17,text(p.email)],[18,text(p.responsibility)],[19,text(p.share)],[21,text(co.name)],[22,text(co.affiliation)],[23,text(co.phone)],[24,text(co.email)],[25,text(co.responsibility)],[26,text(co.share)],[29,joined(form.advisorDetails)],[31,joined(form.collaborationDetails)],[35,`ภาษาไทย: ${text(form.keywordsTH)}   ภาษาอังกฤษ: ${text(form.keywordsEN)}`],[45,text(form.methodology)],[47,text(form.scope)],[53,`${text(form.start)} ถึง ${text(form.end)}`],[65,text(form.progress)],[168,text(signatures[0]?.signedDate)],[174,text(signatures[1]?.signedDate)],[180,text(signatures[2]?.signedDate)],[188,`${text(bio.thaiName)} / ${text(bio.englishName)}`],[189,text(bio.academicPosition)],[190,text(bio.nationalId)],[191,text(bio.education)],[192,text(bio.employment)],[193,text(bio.expertise)],[194,text(bio.publications)],[195,text(bio.presentations)],[196,text(bio.intellectualProperty)],[197,text(bio.researchManagementExperience)],[198,text(bio.completedResearch)],[199,text(bio.ongoingResearch)]]);
- const expertStarts=[223,228,233];experts.slice(0,3).forEach((expert,i)=>{const n=expertStarts[i];appends.set(n,text(expert.name));appends.set(n+1,text(expert.academicPosition));appends.set(n+2,text(expert.affiliation));appends.set(n+3,text(expert.email))});
+ const appends=new Map<number,string>([[14,shown(p.name)],[15,shown(p.affiliation)],[16,shown(p.phone)],[17,shown(p.email)],[18,shown(p.responsibility)],[19,shown(p.share)],[21,shown(co.name)],[22,shown(co.affiliation)],[23,shown(co.phone)],[24,shown(co.email)],[25,shown(co.responsibility)],[26,shown(co.share)],[29,joined(form.advisorDetails)],[31,joined(form.collaborationDetails)],[35,`ภาษาไทย: ${shown(form.keywordsTH)}   ภาษาอังกฤษ: ${shown(form.keywordsEN)}`],[45,shown(form.methodology)],[47,shown(form.scope)],[53,dateRange(form.start,form.end)],[65,shown(form.progress)],[168,shown(thaiDate(signatures[0]?.signedDate))],[174,shown(thaiDate(signatures[1]?.signedDate))],[180,shown(thaiDate(signatures[2]?.signedDate))],[188,`${shown(bio.thaiName)} / ${shown(bio.englishName)}`],[189,shown(bio.academicPosition)],[190,shown(bio.nationalId)],[191,shown(bio.education)],[192,shown(bio.employment)],[193,shown(bio.expertise)],[194,shown(bio.publications)],[195,shown(bio.presentations)],[196,shown(bio.intellectualProperty)],[197,shown(bio.researchManagementExperience)],[198,shown(bio.completedResearch)],[199,shown(bio.ongoingResearch)]]);
+ const expertStarts=[223,228,233];expertStarts.forEach((n,i)=>{const expert=experts[i]??{};appends.set(n,shown(expert.name));appends.set(n+1,shown(expert.academicPosition));appends.set(n+2,shown(expert.affiliation));appends.set(n+3,shown(expert.email))});
  const budgetGroups=[{category:'ค่าตอบแทน',header:88,slots:[90,92,94,96]},{category:'ค่าใช้สอย',header:98,slots:[100,102,104,106,108,110,112,114,116,118,120,122,124,126,128,130]},{category:'วัสดุ',header:133,slots:[135,137,139,141]},{category:'สาธารณูปโภค',header:143,slots:[145,147,149]}];
  const entered=(form.budgetRows??[]).filter(row=>text(row.description)||text(row.breakdown)||text(row.amount));
- for(const group of budgetGroups){const rows=entered.filter(row=>text(row.category)===group.category);if(!rows.length)values.set(group.header,'__REMOVE_BUDGET_ROW__');group.slots.forEach((slot,i)=>{const row=rows[i];if(!row){values.set(slot,'__REMOVE_BUDGET_ROW__');return;}values.set(slot,[text(row.description),text(row.breakdown)].filter(Boolean).join(' — '));values.set(slot+1,text(row.amount))})}
- const total=entered.reduce((sum,row)=>sum+(Number(text(row.amount).replace(/,/g,''))||0),0);values.set(152,total?total.toLocaleString('th-TH'):'0' );
+ for(const group of budgetGroups){const rows=entered.filter(row=>text(row.category)===group.category);group.slots.forEach((slot,i)=>{const row=rows[i];if(!row){if(i===0&&!rows.length){values.set(slot,'-');values.set(slot+1,'-');}else values.set(slot,'__REMOVE_BUDGET_ROW__');return;}values.set(slot,[text(row.description),text(row.breakdown)].filter(Boolean).join(' — ')||'-');values.set(slot+1,shown(row.amount))})}
+ const total=entered.reduce((sum,row)=>sum+(Number(text(row.amount).replace(/,/g,''))||0),0);values.set(152,entered.length?total.toLocaleString('th-TH'):'-' );
  const publication=text(form.publication),standards=new Set(form.researchStandard??[]),strategy=text(form.strategy);
  const strategies=['สอดคล้องกับคุณวุฒิ หรือสาขาวิชา หรือภาระงาน','การพัฒนากำลังคนและสถาบันความรู้','การวิจัยและสร้างนวัตกรรมเพื่อตอบโจทย์ท้าทายของสังคม','การวิจัยและสร้างนวัตกรรมเพื่อเพิ่มขีดความสามารถการแข่งขัน','การวิจัยและสร้างนวัตกรรมเพื่อการพัฒนาเชิงพื้นที่และลดความเหลื่อมล้ำ'];
  const strategyId=Number(strategy.match(/^(?:strategy_)?([1-5])(?:\.|$)/)?.[1]??(strategies.indexOf(strategy)+1));
@@ -149,7 +218,7 @@ export async function POST(request:Request){
   const document=zip.file('word/document.xml');if(!document)throw new Error('ไม่พบโครงสร้างเอกสาร Word');
   const xml=await document.async('string');const {values,appends,checks}=fields(form);
   const filled=removeUnusedBudgetRows(insertAdditionalCoResearchers(fillParagraphs(xml,values,appends,checks),form.coResearchers??[]));
-  zip.file('word/document.xml',normalizeBodyTypography(stripRedGuidance(improvePageFlow(filled))));
+  zip.file('word/document.xml',normalizeBodyTypography(stripRedGuidance(normalizeBiographyHeading(improvePageFlow(filled)))));
   const output=await zip.generateAsync({type:'uint8array',compression:'DEFLATE'});
   const body=output.buffer.slice(output.byteOffset,output.byteOffset+output.byteLength) as ArrayBuffer;
   return new NextResponse(body,{headers:{'Content-Type':'application/vnd.openxmlformats-officedocument.wordprocessingml.document','Content-Disposition':"attachment; filename*=UTF-8''RS-1-filled.docx",'Cache-Control':'no-store'}});

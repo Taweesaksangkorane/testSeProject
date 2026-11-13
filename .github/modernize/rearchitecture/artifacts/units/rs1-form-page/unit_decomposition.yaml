@@ -1,0 +1,7 @@
+unit: rs1-form-page
+commit: false
+candidate_splits:
+  - id: "app/page.tsx:84"
+    drivers: [concern_split, reuse_split]
+    rationale: "The root client component owns upload, mapping, a large editable form, draft state, preview, signatures, and export actions; these concerns can be isolated without changing ProjectForm."
+    source_slice: {file: app/page.tsx, lines: [84, 117]}

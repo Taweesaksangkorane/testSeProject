@@ -1,0 +1,49 @@
+contracts:
+  - name: rs1-upload-extraction
+    unit: extract-api
+    type: rest
+    stability: frozen
+    source_loc: "app/api/extract/route.ts:13"
+    contract:
+      method: "POST"
+      path: "/api/extract"
+      request: "multipart/form-data with file (.doc or .docx), maximum 10 MiB"
+      response: "legacy Extraction fields plus sourceDocument, sectionMap, and canonical evidence"
+      error: "400 JSON {error} for input/type/size; 500 JSON {error} for parsing failure"
+      auth: "none in current PoC"
+    target_contract:
+      method: "POST(request: Request) -> JSON Rs1PipelineResult"
+      notes: "Legacy top-level keys remain; canonical additions are additive."
+    semantic_divergence: []
+  - name: rs1-docx-generation
+    unit: generate-docx-api
+    type: rest
+    stability: frozen
+    source_loc: "app/api/generate-docx/route.ts:144"
+    contract:
+      method: "POST"
+      path: "/api/generate-docx"
+      request: "JSON ProjectForm"
+      response: "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+      error: "400/500 JSON {error}"
+      auth: "none in current PoC"
+    target_contract:
+      method: "POST(request: Request) -> DOCX bytes"
+      notes: "Native DOCX template remains layout authority."
+    semantic_divergence: []
+  - name: rs1-pdf-conversion
+    unit: convert-docx-pdf-api
+    type: rest
+    stability: frozen
+    source_loc: "app/api/convert-docx-pdf/route.ts:12"
+    contract:
+      method: "POST"
+      path: "/api/convert-docx-pdf"
+      request: "DOCX bytes, maximum 10 MiB"
+      response: "inline application/pdf"
+      error: "400/500 JSON {error}"
+      auth: "none in current PoC"
+    target_contract:
+      method: "POST(request: Request) -> PDF bytes"
+      notes: "Current implementation requires Microsoft Word COM on Windows."
+    semantic_divergence: []

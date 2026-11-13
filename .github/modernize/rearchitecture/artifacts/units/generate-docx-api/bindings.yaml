@@ -1,0 +1,15 @@
+unit: generate-docx-api
+bindings:
+  - type: route-declaration
+    name: "POST /api/generate-docx"
+    source_loc: "app/api/generate-docx/route.ts:144"
+    target: "POST"
+    must_appear_in_target: true
+    notes: "Next.js Node App Router handler."
+runtime_config:
+  - key: "public/templates/rs1-private-template.docx"
+    source_loc: "app/api/generate-docx/route.ts:144"
+    source: code
+    default_value: "native RS-1 DOCX template"
+    must_appear_in_target: true
+    notes: "Template structure is the export layout authority."

@@ -1,0 +1,48 @@
+user_intent:
+  raw_request: "Redesign RS-1 extraction as a modular, section-based, template-independent pipeline while preserving working API, UI, and export behavior."
+  inferred_acceptance:
+    - "route Thai and English semantic sections without page or paragraph offsets"
+    - "preserve ordered source evidence, tables, checkboxes, and images"
+    - "return canonical field evidence without breaking the legacy response"
+    - "keep missing and uncertain values explicit for human review"
+    - "tests and production build pass"
+  cleanup_required: false
+strategy: phased
+runtime_reachable:
+  - app/api/extract/route.ts
+  - lib/docx.ts
+  - lib/extract.ts
+  - lib/rs1-sections.ts
+  - lib/rs1-pipeline.ts
+  - app/page.tsx
+must_rewrite:
+  - path: lib/docx.ts
+    reason: "The uploaded DOCX/DOC must enter a unified, ordered representation with table, checkbox, and image evidence."
+  - path: lib/rs1-sections.ts
+    reason: "Semantic section detection is the template-independent routing boundary."
+  - path: lib/rs1-pipeline.ts
+    reason: "Independent section extractors, canonical evidence, and validation are the requested target behavior."
+  - path: app/api/extract/route.ts
+    reason: "The upload entrypoint must invoke the modular pipeline while preserving its HTTP contract."
+  - path: tests/rs1-sections.test.mjs
+    reason: "Acceptance requires section routing regression coverage."
+  - path: tests/rs1-pipeline.test.mjs
+    reason: "Acceptance requires independent extractor and validation coverage."
+  - path: tests/source-document.test.mjs
+    reason: "Acceptance requires unified representation coverage for structural evidence."
+copy_as_is:
+  - lib/extract.ts
+  - lib/import-mapping.ts
+  - app/page.tsx
+  - app/rs1-preview.tsx
+  - app/api/generate-docx/route.ts
+  - app/api/convert-docx-pdf/route.ts
+legacy_allowed_to_remain:
+  - lib/extract.ts
+defer_cleanup:
+  - "Replace legacy field rules only after real stakeholder fixtures prove equivalent or better field-level accuracy."
+  - "Add PDF text, OCR, and vision adapters as opt-in parser modules after privacy and deployment decisions."
+full_rewrite_reason: null
+implementation_rule: >
+  Implement only must_rewrite paths plus necessary documentation. Keep copy_as_is paths and
+  the legacy extraction response stable. Source anchors document behavior and are not rewrite targets.

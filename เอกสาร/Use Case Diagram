@@ -1,0 +1,162 @@
+# Use Case Diagram
+
+ระบบบริหารจัดการทุนวิจัยส่วนตัว มหาวิทยาลัยแม่ฟ้าหลวง
+
+```mermaid
+flowchart LR
+    Researcher["👤<br/>นักวิจัย"]
+    Staff["👤<br/>เจ้าหน้าที่ส่วนบริหารงานวิจัย"]
+    Reviewer["👤<br/>ผู้ทรงคุณวุฒิ"]
+    Email["✉️<br/>บริการอีเมล"]
+
+    subgraph System["ระบบบริหารจัดการทุนวิจัยส่วนตัว"]
+        direction TB
+
+        subgraph Draft["จัดทำข้อเสนอโครงการ"]
+            A(["สร้างโครงการใหม่"])
+            B(["กรอกข้อมูล RS-1"])
+            C(["แก้ไขข้อมูล RS-1"])
+            D(["บันทึกร่างโครงการ"])
+            E(["อัปโหลดเอกสาร RS-1"])
+            F(["สกัดข้อมูลจาก RS-1"])
+            G(["ตรวจสอบข้อมูลที่สกัดได้"])
+            H(["แก้ไขข้อมูลที่สกัดได้"])
+            I(["สร้าง PDF ฉบับพร้อมยื่น"])
+        end
+
+        subgraph Submit["ยื่นข้อเสนอโครงการ"]
+            J(["ยืนยันเอกสารพร้อมยื่นต้นสังกัด"])
+            K(["แนบ RS-1 ฉบับลงนาม"])
+            L(["แนบหลักฐานความเห็นชอบต้นสังกัด"])
+            M(["ยืนยันความยินยอมลายเซ็นอิเล็กทรอนิกส์"])
+            N(["ยืนยันส่งข้อเสนอให้เจ้าหน้าที่"])
+        end
+
+        subgraph ProposalReview["ตรวจข้อเสนอและรับรองโครงการ"]
+            O(["ดูรายการและรายละเอียดโครงการ"])
+            P(["ดูสถานะและประวัติโครงการ"])
+            Q(["ตรวจข้อเสนอและเอกสาร"])
+            R(["แจ้งส่งกลับแก้ไข"])
+            S(["บันทึกผลตรวจผ่าน"])
+            T(["บันทึกขั้นตอนเสนอคณะกรรมการเพื่อทราบ"])
+            U(["บันทึกรับรองโครงการ"])
+        end
+
+        subgraph Progress["ติดตามโครงการ"]
+            V(["บันทึกผลขยายเวลา"])
+            W(["ส่งอีเมลแจ้งสถานะโครงการ"])
+            X(["ส่งอีเมลเตือนใกล้ครบกำหนด"])
+            AQ(["เจ้าหน้าที่บันทึกผลคำขอเปลี่ยนแปลง<br/>และปรับปรุงข้อมูลโครงการ"])
+        end
+
+        subgraph Closure["ยื่นและตรวจเอกสารปิดโครงการ"]
+            Y(["เลือกเส้นทางปิดโครงการ"])
+            Z(["แนบรายงานวิจัย 5 บท"])
+            AA(["แนบรายงานย่อและหลักฐานผลงานเผยแพร่"])
+            AB(["ยืนยันส่งเอกสารปิดโครงการ"])
+            AC(["ตรวจเอกสารปิดโครงการ"])
+            AD(["แจ้งให้ส่งเอกสารเพิ่มเติม"])
+            AE(["แนบเอกสารเพิ่มเติม"])
+        end
+
+        subgraph Publication["ปิดโครงการเส้นทางผลงานเผยแพร่"]
+            AF(["ตรวจหลักฐานผลงานเผยแพร่"])
+            AG(["บันทึกปิดโครงการเส้นทางผลงานเผยแพร่"])
+        end
+
+        subgraph Report["ประเมินและปิดโครงการเส้นทางรายงาน 5 บท"]
+            AH(["มอบหมายงานประเมินให้ผู้ทรงคุณวุฒิ"])
+            AI(["ดูงานประเมินที่ได้รับมอบหมาย"])
+            AJ(["เปิดอ่านหรือดาวน์โหลดร่างรายงาน"])
+            AK(["บันทึกร่างแบบประเมิน"])
+            AL(["ส่งผลประเมิน"])
+            AM(["สร้าง PDF ผลประเมิน"])
+            AN(["ส่งผลประเมินให้นักวิจัย"])
+            AO(["ส่งรายงานฉบับแก้ไข"])
+            AP(["บันทึกปิดโครงการเส้นทางรายงาน 5 บท"])
+        end
+    end
+
+    Researcher --- A
+    Researcher --- B
+    Researcher --- C
+    Researcher --- D
+    Researcher --- E
+    Researcher --- G
+    Researcher --- H
+    Researcher --- I
+    Researcher --- J
+    Researcher --- K
+    Researcher --- L
+    Researcher --- M
+    Researcher --- N
+    Researcher --- P
+    Researcher --- Y
+    Researcher --- Z
+    Researcher --- AA
+    Researcher --- AB
+    Researcher --- AE
+    Researcher --- AO
+
+    Staff --- O
+    Staff --- P
+    Staff --- Q
+    Staff --- R
+    Staff --- S
+    Staff --- T
+    Staff --- U
+    Staff --- V
+    Staff --- AQ
+    Staff --- AC
+    Staff --- AD
+    Staff --- AF
+    Staff --- AG
+    Staff --- AH
+    Staff --- AM
+    Staff --- AN
+    Staff --- AP
+
+    Reviewer --- AI
+    Reviewer --- AJ
+    Reviewer --- AK
+    Reviewer --- AL
+
+    E -.-> F
+    F -.-> G
+    G -.-> H
+    I -.-> J
+    K -.-> N
+    L -.-> N
+    M -.-> N
+    Q -.-> R
+    Q -.-> S
+    Y -.-> Z
+    Y -.-> AA
+    Z -.-> AB
+    AA -.-> AB
+    AB -.-> AC
+    AC -.-> AD
+    AD -.-> AE
+    AC -.-> AF
+    AC -.-> AH
+    AH -.-> AI
+    AJ -.-> AK
+    AK -.-> AL
+    AL -.-> AM
+    AM -.-> AN
+    AN -.-> AO
+    AF -.-> AG
+    AO -.-> AP
+    W --> Email
+    X --> Email
+
+    classDef actor fill:#ffffff,stroke:#374151,color:#111827
+    classDef usecase fill:#f8fafc,stroke:#475569,color:#0f172a
+    classDef external fill:#fef3c7,stroke:#d97706,color:#78350f
+
+    class Researcher,Staff,Reviewer actor
+    class A,B,C,D,E,F,G,H,I,J,K,L,M,N,O,P,Q,R,S,T,U,V,W,X,Y,Z,AA,AB,AC,AD,AE,AF,AG,AH,AI,AJ,AK,AL,AM,AN,AO,AP,AQ usecase
+    class Email external
+```
+
+> e-Office เป็นกระบวนการภายนอก Web จึงไม่ได้แสดงเป็นการเชื่อมต่อโดยตรงกับระบบในแผนภาพนี้

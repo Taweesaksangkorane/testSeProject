@@ -1,0 +1,7 @@
+unit: generate-docx-api
+commit: false
+candidate_splits:
+  - id: "app/api/generate-docx/route.ts:19"
+    drivers: [concern_split, reuse_split]
+    rationale: "OOXML formatting helpers and the HTTP route lifecycle are independent concerns; isolating the transformer would enable direct unit tests without changing the route contract."
+    source_slice: {file: app/api/generate-docx/route.ts, lines: [19, 143]}
