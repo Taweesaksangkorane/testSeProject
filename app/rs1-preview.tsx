@@ -13,9 +13,9 @@ type TemplateProps={form:ProjectForm;onBack:()=>void;onPreview?:()=>void;onChang
 function applyValues(source:string,form:ProjectForm){
  const principal=form.principal;
  const co=form.coResearchers[0]??{name:'',affiliation:'',phone:'',email:'',responsibility:'',share:''};
- const input=(value:string,large=false,section?:string)=>{
+ const input=(value:string,large=false,section?:string,field?:string)=>{
   if(!value.trim())return '';
-  const target=section?` data-edit-section="${section}"`:'';
+  const target=section?` data-edit-section="${section}"${field?` data-edit-field="${attr(field)}"`:''}`:'';
   if(!large)return `<span class="template-filled"${target}>${filled(value).replace(/\r?\n/g,'<br>')}</span>`;
   const paragraphs=value.trim().split(/\r?\n[ \t]*\r?\n+/).map(block=>{
    const content=filled(block).replace(/\r?\n/g,'<br>');
@@ -24,12 +24,21 @@ function applyValues(source:string,form:ProjectForm){
   }).join('');
   return `<div class="template-filled template-filled-large"${target}>${paragraphs}</div>`;
  };
+ const detailInput=(fields:ReadonlyArray<readonly [string,string,string]>,section:string)=>fields.filter(([,value])=>value.trim()).map(([label,value,field])=>`<span class="template-detail-line">${escapeHtml(label)}: ${input(value,false,section,field)}</span>`).join('');
  const paragraphText=(paragraph:string)=>paragraph.replace(/<[^>]+>/g,' ').replace(/&nbsp;/g,' ').replace(/\s+/g,' ').trim();
  const appendAfter=(html:string,match:string,value:string,large=false,section?:string)=>{
   if(!value.trim())return html;
   let used=false;
   return html.replace(/<p\b[^>]*>[\s\S]*?<\/p>/gi,paragraph=>{
    if(!used&&paragraphText(paragraph).includes(match)){used=true;return `${paragraph}<div class="template-insert">${input(value,large,section)}</div>`;}
+   return paragraph;
+  });
+ };
+ const appendHtmlAfter=(html:string,match:string,value:string)=>{
+  if(!value)return html;
+  let used=false;
+  return html.replace(/<p\b[^>]*>[\s\S]*?<\/p>/gi,paragraph=>{
+   if(!used&&paragraphText(paragraph).includes(match)){used=true;return `${paragraph}<div class="template-insert">${value}</div>`;}
    return paragraph;
   });
  };
@@ -62,25 +71,10 @@ function applyValues(source:string,form:ProjectForm){
  ] as const;
  for(const [number,heading,value,large] of sections){const section=number.replace('.','');const field=({6:'significance',7:'objectives',8:'literature',9:'references',10:'methodology',11:'scope',13:'progress',14:'outcomes',15:'integrationDetails',19:'otherNotes'} as Record<string,string>)[section];result=appendAfter(result,heading,value,large,`A:${section}#${field}`);}
 
- result=appendAfter(result,'2. ที่ปรึกษาโครงการวิจัย',labeledDetails([
-  ['ชื่อบุคคล',form.advisorDetails.name],
-  ['คุณวุฒิ',form.advisorDetails.qualification],
-  ['ตำแหน่งทางวิชาการ',form.advisorDetails.academicPosition],
-  ['สังกัดหน่วยงาน',form.advisorDetails.affiliation],
-  ['อีเมล',form.advisorDetails.email],
-  ['โทรศัพท์',form.advisorDetails.phone]
- ]),false,'A:2');
- result=appendAfter(result,'3. ความร่วมมือด้านการวิจัย',labeledDetails([
-  ['ชื่อบุคคล',form.collaborationDetails.person],
-  ['ชื่อหน่วยงาน',form.collaborationDetails.organization],
-  ['ที่อยู่',form.collaborationDetails.address],
-  ['ลักษณะความร่วมมือทางวิจัย',form.collaborationDetails.description]
- ]),false,'A:3');
+ result=appendHtmlAfter(result,'2. ที่ปรึกษาโครงการวิจัย',detailInput([['ชื่อบุคคล',form.advisorDetails.name,'advisorDetails.name'],['คุณวุฒิ',form.advisorDetails.qualification,'advisorDetails.qualification'],['ตำแหน่งทางวิชาการ',form.advisorDetails.academicPosition,'advisorDetails.academicPosition'],['สังกัดหน่วยงาน',form.advisorDetails.affiliation,'advisorDetails.affiliation'],['อีเมล',form.advisorDetails.email,'advisorDetails.email'],['โทรศัพท์',form.advisorDetails.phone,'advisorDetails.phone']],'A:2'));
+ result=appendHtmlAfter(result,'3. ความร่วมมือด้านการวิจัย',detailInput([['ชื่อบุคคล',form.collaborationDetails.person,'collaborationDetails.person'],['ชื่อหน่วยงาน',form.collaborationDetails.organization,'collaborationDetails.organization'],['ที่อยู่',form.collaborationDetails.address,'collaborationDetails.address'],['ลักษณะความร่วมมือทางวิจัย',form.collaborationDetails.description,'collaborationDetails.description']],'A:3'));
  result=appendAfter(result,'4. ประเภทของการวิจัย',form.researchType,false,'A:4');
- result=appendAfter(result,'5. คำสำคัญ',labeledDetails([
-  ['ภาษาไทย',form.keywordsTH],
-  ['ภาษาอังกฤษ',form.keywordsEN]
- ]),false,'A:5');
+ result=appendHtmlAfter(result,'5. คำสำคัญ',detailInput([['ภาษาไทย',form.keywordsTH,'keywordsTH'],['ภาษาอังกฤษ',form.keywordsEN,'keywordsEN']],'A:5'));
  const total=form.budgetRows.reduce((sum,row)=>sum+(Number(row.amount.replace(/,/g,''))||0),0);
 
  const biography=form.principalBiography;
@@ -201,14 +195,14 @@ function applyValues(source:string,form:ProjectForm){
    node=next;
   }
  }
- const setCheckbox=(needle:string,selected:boolean,section:string)=>{
+ const setCheckbox=(needle:string,selected:boolean,section:string,field?:string)=>{
   parsed.querySelectorAll('p').forEach(paragraph=>{
    if(!paragraph.textContent?.includes(needle))return;
    const checkbox=paragraph.querySelector('.cb');
    if(!checkbox)return;
    checkbox.textContent=selected?'✓':'';
    checkbox.classList.toggle('checked',selected);
-   if(selected)paragraph.setAttribute('data-edit-section',section);
+   if(selected){paragraph.setAttribute('data-edit-section',section);if(field)paragraph.setAttribute('data-edit-field',field);}
   });
  };
  const strategyNeedles=[
@@ -218,11 +212,11 @@ function applyValues(source:string,form:ProjectForm){
   'เพิ่มขีดความสามารถการแข่งขัน',
   'พัฒนาเชิงพื้นที่และลดความเหลื่อมล้ำ'
  ];
- strategyNeedles.forEach((needle,index)=>setCheckbox(needle,index===strategyChoice,'intro:strategy'));
- setCheckbox('ไม่มีการทำวิจัยในมนุษย์',form.researchStandard.includes('none'),'A:18');
- setCheckbox('มีการทำวิจัยในมนุษย์',form.researchStandard.includes('human'),'A:18');
- setCheckbox('มีการใช้สัตว์ทดลอง',form.researchStandard.includes('animal'),'A:18');
- setCheckbox('เก็บ จัดหา หรือรวบรวมพันธุ์พืช',form.researchStandard.includes('plant'),'A:18');
+ strategyNeedles.forEach((needle,index)=>setCheckbox(needle,index===strategyChoice,'intro:strategy','strategy'));
+ setCheckbox('ไม่มีการทำวิจัยในมนุษย์',form.researchStandard.includes('none'),'A:18','researchStandard');
+ setCheckbox('มีการทำวิจัยในมนุษย์',form.researchStandard.includes('human'),'A:18','researchStandard');
+ setCheckbox('มีการใช้สัตว์ทดลอง',form.researchStandard.includes('animal'),'A:18','researchStandard');
+ setCheckbox('เก็บ จัดหา หรือรวบรวมพันธุ์พืช',form.researchStandard.includes('plant'),'A:18','researchStandard');
  setCheckbox('ระดับภูมิภาค ประเทศ หรือนานาชาติ',form.transfer.includes('ระดับภูมิภาค'),'A:16');
  setCheckbox('เฉพาะกลุ่มอาชีพ ชุมชน หรือจังหวัด',form.transfer.includes('เฉพาะกลุ่มอาชีพ'),'A:16');
  setCheckbox('ไม่มีการนำไปถ่ายทอดสู่สังคม',form.transfer.includes('ไม่มีการนำไปถ่ายทอด'),'A:16');
@@ -230,30 +224,28 @@ function applyValues(source:string,form:ProjectForm){
  setCheckbox('ระดับชาติ',form.publication==='national-journal','A:14');
  setCheckbox('นำเสนอในการประชุมวิชาการระดับนานาชาติ',form.publication==='international-conference','A:14');
  setCheckbox('ทรัพย์สินทางปัญญา',form.publication==='intellectual-property','A:14');
- const makeCell=(value:string)=>{
-  const cell=parsed.createElement('td');cell.textContent=value;return cell;
+ const makeCell=(value:string,section:string,field:string)=>{
+  const cell=parsed.createElement('td');cell.textContent=value;cell.setAttribute('data-edit-section',section);cell.setAttribute('data-edit-field',field);return cell;
  };
  parsed.querySelectorAll('table').forEach(table=>{
   const tableText=table.textContent??'';
   const body=table.querySelector('tbody')??table;
   if(tableText.includes('กิจกรรมวิจัย')){
-   table.setAttribute('data-edit-section','A:12');
    Array.from(body.querySelectorAll('tr')).slice(1).forEach(row=>row.remove());
-   form.schedule.filter(row=>row.activity.trim()||row.period.trim()).forEach(row=>{
-    const tr=parsed.createElement('tr');tr.append(makeCell(row.activity),makeCell(row.period));body.append(tr);
+   form.schedule.filter(row=>row.activity.trim()||row.period.trim()).forEach((row,index)=>{
+    const tr=parsed.createElement('tr');tr.append(makeCell(row.activity,'A:12',`schedule.${index}.activity`),makeCell(row.period,'A:12',`schedule.${index}.period`));body.append(tr);
    });
   }
   if(tableText.includes('รายการค่าใช้จ่าย')||tableText.includes('จำนวนเงิน')){
-   table.setAttribute('data-edit-section','A:17');
    Array.from(body.querySelectorAll('tr')).slice(1).forEach(row=>row.remove());
-   form.budgetRows.filter(row=>row.description.trim()||row.breakdown.trim()||row.amount.trim()).forEach(row=>{
+   form.budgetRows.filter(row=>row.description.trim()||row.breakdown.trim()||row.amount.trim()).forEach((row,index)=>{
     const tr=parsed.createElement('tr');
-    tr.append(makeCell(row.description||row.category),makeCell(row.amount));
+    tr.append(makeCell(row.description||row.category,'A:17',`budgetRows.${index}.description`),makeCell(row.amount,'A:17',`budgetRows.${index}.amount`));
     body.append(tr);
    });
    const total=form.budgetRows.reduce((sum,row)=>sum+(Number(row.amount.replace(/,/g,''))||0),0);
    if(total||form.budgetRows.some(row=>row.amount.trim())){
-    const tr=parsed.createElement('tr');tr.append(makeCell('รวมงบประมาณที่ใช้ในการวิจัย'),makeCell(total.toLocaleString('th-TH')));body.append(tr);
+    const tr=parsed.createElement('tr');tr.append(makeCell('รวมงบประมาณที่ใช้ในการวิจัย','A:17','budgetRows'),makeCell(total.toLocaleString('th-TH'),'A:17','budgetRows'));body.append(tr);
    }
   }
  });
@@ -277,7 +269,7 @@ export default function Rs1Preview({form,onBack,onEditSection}:{form:ProjectForm
   const handleClick=(event:MouseEvent)=>{
    const target=(event.target as Element).closest<HTMLElement>('[data-edit-section]');
    const section=target?.dataset.editSection;
-   if(section){event.preventDefault();onEditSection(section);}
+   if(section){event.preventDefault();onEditSection(`${section}${target?.dataset.editField?`#${target.dataset.editField}`:''}`);}
   };
   root.addEventListener('click',handleClick);
   return()=>root.removeEventListener('click',handleClick);
@@ -286,8 +278,9 @@ export default function Rs1Preview({form,onBack,onEditSection}:{form:ProjectForm
  .template-filled{white-space:pre-wrap;border:0!important;outline:0!important;background:transparent!important}
  .template-filled[data-edit-section]{cursor:pointer;border-radius:2pt;box-shadow:0 0 0 1px transparent;transition:background .15s,box-shadow .15s}
  .template-filled[data-edit-section]:hover{background:#fff4b8!important;box-shadow:0 0 0 1px #d3a800}
- .paper p[data-edit-section],.paper table[data-edit-section]{cursor:pointer}
- .paper p[data-edit-section]:hover,.paper table[data-edit-section]:hover{outline:1px solid #d3a800;background:#fffbe1}
+ .paper p[data-edit-section],.paper table[data-edit-section],.paper td[data-edit-section]{cursor:pointer}
+ .paper p[data-edit-section]:hover,.paper table[data-edit-section]:hover,.paper td[data-edit-section]:hover{outline:1px solid #d3a800;background:#fffbe1}
+ .template-detail-line{display:block}
  .template-insert{display:block!important;margin:0!important;padding:0!important;text-indent:0!important}
  .template-filled-large{display:block;min-height:0!important;margin:4pt 0 8pt;padding:0!important}
  .cb.checked{font-size:12pt!important;border:0!important;width:.62em;height:.62em;line-height:.62em;font-family:Arial,sans-serif}
